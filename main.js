@@ -81,6 +81,36 @@ ipcMain.handle("clients:add", (event, { name, logo_url }) => {
   });
 });
 
+ipcMain.handle("clients:update", (event, client) => {
+  return new Promise((resolve, reject) => {
+    const query = `
+      UPDATE clients 
+      SET name = ?, logo_url = ?, url = ?
+      WHERE id = ?
+    `;
+    const params = [
+      client.name ? client.name.trim() : "",
+      client.logo_url ? client.logo_url.trim() : null,
+      client.url ? client.url.trim() : null,
+      client.id,
+    ];
+    db.run(query, params, function (err) {
+      if (err) reject(err);
+      else resolve({ success: true, changes: this.changes });
+    });
+  });
+});
+
+// Ensure your client delete channel matches preload.js ("clients:delete")
+ipcMain.handle("clients:delete", (event, id) => {
+  return new Promise((resolve, reject) => {
+    db.run("DELETE FROM clients WHERE id = ?", [id], function (err) {
+      if (err) reject(err);
+      else resolve({ success: true, changes: this.changes });
+    });
+  });
+});
+
 // ----------------------------------------------------
 // IPC: Subscriptions
 // ----------------------------------------------------
@@ -90,6 +120,7 @@ ipcMain.handle("subscriptions:getAll", () => {
       SELECT 
         s.*, 
         c.name AS client_name,
+        c.url as client_url,
         c.logo_url as client_logo,
         GROUP_CONCAT(ss.name, '||') AS services_str
       FROM subscriptions s
@@ -119,7 +150,7 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
 
     const query = `
       INSERT INTO subscriptions 
-      (id, provider, client_id, billing_url, cancellation_url, amount, frequency, start_date, next_due_date, status, notes)
+      (id, provider_id, client_id, billing_url, cancellation_url, amount, frequency, start_date, next_due_date, status, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
@@ -190,6 +221,88 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
   });
 });
 
+ipcMain.handle("subscriptions:update", (event, sub) => {
+  return new Promise((resolve, reject) => {
+    const query = `
+      UPDATE subscriptions 
+      SET provider_id = ?, client_id = ?, billing_url = ?, cancellation_url = ?, 
+          amount = ?, frequency = ?, start_date = ?, next_due_date = ?, status = ?, notes = ?
+      WHERE id = ?
+    `;
+    const params = [
+      sub.provider_id || null,
+      sub.client_id || null,
+      sub.billing_url ? sub.billing_url.trim() : null,
+      sub.cancellation_url ? sub.cancellation_url.trim() : null,
+      Number(sub.amount) || 0,
+      sub.frequency || "monthly",
+      sub.start_date || null,
+      sub.next_due_date || null,
+      (sub.status || "active").toLowerCase(),
+      sub.notes ? sub.notes.trim() : "",
+      sub.id,
+    ];
+
+    db.serialize(() => {
+      let failed = false;
+
+      db.run("BEGIN TRANSACTION", (err) => {
+        if (err) {
+          failed = true;
+          return reject(err);
+        }
+      });
+
+      // 1. Update main subscription row
+      db.run(query, params, function (err) {
+        if (err && !failed) {
+          failed = true;
+          db.run("ROLLBACK");
+          return reject(err);
+        }
+      });
+
+      // 2. Refresh linked services: delete old ones and insert current selection
+      db.run(
+        "DELETE FROM services WHERE subscription_id = ?",
+        [sub.id],
+        function (err) {
+          if (err && !failed) {
+            failed = true;
+            db.run("ROLLBACK");
+            return reject(err);
+          }
+        },
+      );
+
+      if (Array.isArray(sub.services) && sub.services.length > 0) {
+        const stmt = db.prepare(
+          "INSERT INTO services (id, subscription_id, name) VALUES (?, ?, ?)",
+        );
+        for (const service of sub.services) {
+          stmt.run([uuidv4(), sub.id, String(service).trim()], (err) => {
+            if (err && !failed) {
+              failed = true;
+              db.run("ROLLBACK");
+              return reject(err);
+            }
+          });
+        }
+        stmt.finalize();
+      }
+
+      // 3. Commit changes
+      db.run("COMMIT", function (err) {
+        if (err && !failed) {
+          db.run("ROLLBACK");
+          return reject(err);
+        }
+        if (!failed) resolve({ success: true, ...sub });
+      });
+    });
+  });
+});
+
 ipcMain.handle("subscriptions:delete", (event, id) => {
   return new Promise((resolve, reject) => {
     db.run("DELETE FROM subscriptions WHERE id = ?", [id], function (err) {
@@ -198,6 +311,7 @@ ipcMain.handle("subscriptions:delete", (event, id) => {
     });
   });
 });
+
 // ----------------------------------------------------
 // IPC: External Links
 // ----------------------------------------------------
@@ -205,4 +319,17 @@ ipcMain.handle("utils:openLink", async (event, url) => {
   if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
     await shell.openExternal(url);
   }
+});
+
+// ----------------------------------------------------
+// IPC: Providers
+// ----------------------------------------------------
+ipcMain.handle("providers:getAll", (event) => {
+  return new Promise((resolve, reject) => {
+    const query = "SELECT * FROM providers";
+    db.all(query, [], function (err, rows) {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
 });

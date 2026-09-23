@@ -1,44 +1,56 @@
 // src/App.jsx
 import React, { useState, useEffect } from "react";
-import "./App.css"; // Ensure you import the new CSS file!
+import "./App.css";
 
 export default function App() {
   const [clients, setClients] = useState([]);
   const [subs, setSubs] = useState([]);
-  const [selectedClientId, setSelectedClientId] = useState("all"); //the id of the client whose subscriptions we see
+  const [selectedClientId, setSelectedClientId] = useState("all");
 
   // Modal toggles
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
 
-  // Client form state
-  const DEFAULT_CLIENT = { name: "", logo_url: "" };
+  // Tracks edit mode (null = adding new, string ID = updating existing)
+  const [editingClientId, setEditingClientId] = useState(null);
+  const [editingSubId, setEditingSubId] = useState(null);
+
+  const DEFAULT_CLIENT = { name: "", logo_url: "", url: "" };
   const [client, setClient] = useState(DEFAULT_CLIENT);
 
   const DEFAULT_SUB = {
-    provider: "",
+    provider_id: "",
     client_id: "",
     services: [],
     amount: 0,
-    frequency: "",
+    frequency: "monthly",
     start_date: "",
-    next_due_date: null,
-    cancellationUrl: "",
-    billing_url: "",
+    next_due_date: "",
     cancellation_url: "",
+    billing_url: "",
     status: "ACTIVE",
     notes: "",
   };
-  // Subscription form state
   const [subscription, setSubscription] = useState(DEFAULT_SUB);
+
+  const AVAILABLE_PROVIDERS = [
+    {
+      id: "888",
+      name: "Cloudfare",
+      url: "https://cloudfare.com",
+    },
+  ];
+
+  const [providers, setProviders] = useState(AVAILABLE_PROVIDERS);
+  const getProviderById = (id) => providers.find((p) => p.id === id);
 
   async function refreshData() {
     const [c, s] = await Promise.all([
       window.api.getClients(),
       window.api.getSubscriptions(),
     ]);
-    setClients(c);
-    setSubs(s);
+    setClients(c || []);
+    setSubs(s || []);
   }
 
   useEffect(() => {
@@ -58,64 +70,140 @@ export default function App() {
       const currentServices = Array.isArray(prev?.services)
         ? prev.services
         : [];
-
       if (currentServices.includes(service)) {
         return {
           ...prev,
           services: currentServices.filter((s) => s !== service),
         };
       }
-
       return {
         ...prev,
         services: [...currentServices, service],
       };
     });
   }
-  async function handleAddClient(e) {
-    e.preventDefault();
-    await window.api.addClient({
-      name: client.name,
-      //contact_email: clientEmail,
-      logo_url: client.logo || null,
+
+  // --- CLIENT ACTIONS ---
+  function openCreateClientModal() {
+    setEditingClientId(null);
+    setClient(DEFAULT_CLIENT);
+    setIsClientModalOpen(true);
+  }
+
+  function openEditClientModal(c, e) {
+    e.stopPropagation(); // Don't trigger client row selection
+    setEditingClientId(c.id);
+    setClient({
+      name: c.name || "",
+      logo_url: c.logo_url || "",
+      url: c.url || "",
     });
-    setClient({});
+    setIsClientModalOpen(true);
+  }
+
+  async function handleSaveClient(e) {
+    e.preventDefault();
+    if (editingClientId) {
+      // if editing save changes
+      await window.api.updateClient({
+        id: editingClientId,
+        name: client.name,
+        logo_url: client.logo_url || null,
+        url: client.url || null,
+      });
+    } else {
+      //otherwise add client
+      await window.api.addClient({
+        name: client.name,
+        logo_url: client.logo_url || null,
+        url: client.url || null,
+      });
+    }
+    setClient(DEFAULT_CLIENT);
+    setEditingClientId(null);
     setIsClientModalOpen(false);
     refreshData();
   }
 
-  async function handleDeleteClient(id) {
-    e.preventDefault();
+  async function handleDeleteClient(id, e) {
+    e.stopPropagation(); // Don't trigger client row selection
+    //! delete them and their subscriptions only if they are not active
+    if (subs.some((s) => s.client_id === id)) {
+      window.alert(
+        "Cannot delete this client as they have active subscriptions",
+      );
+      return;
+    }
+    if (!window.confirm("Are you sure you want to delete this client?")) return;
     await window.api.deleteClient(id);
+    if (selectedClientId === id) {
+      setSelectedClientId("all");
+    }
     refreshData();
   }
 
-  async function handleAddSub(e) {
-    e.preventDefault(); // do not reload -- remove it and every time a form is submitted, the app will restart
-    await window.api.addSubscription({
-      provider: subscription.provider,
-      client_id: subscription.client || null,
-      services: subscription.services, //?.join(" ,"),
-      amount: parseFloat(subscription.amount),
+  // --- SUBSCRIPTION ACTIONS ---
+  function openCreateSubModal() {
+    setEditingSubId(null);
+    setSubscription({
+      ...DEFAULT_SUB,
+      client_id: selectedClientId !== "all" ? selectedClientId : "",
+    });
+    setIsSubModalOpen(true);
+  }
+
+  function openEditSubModal(s) {
+    setEditingSubId(s.id);
+    setSubscription({
+      provider_id: s.provider || s.provider_id || "",
+      client_id: s.client_id || "",
+      services: Array.isArray(s.services) ? s.services : [],
+      amount: s.amount || 0,
+      frequency: s.frequency || "monthly",
+      start_date: s.start_date || "",
+      next_due_date: s.next_due_date || "",
+      billing_url: s.billing_url || "",
+      cancellation_url: s.cancellation_url || "",
+      status: s.status || "ACTIVE",
+      notes: s.notes || "",
+    });
+    setIsSubModalOpen(true);
+  }
+
+  async function handleSaveSub(e) {
+    e.preventDefault();
+    const payload = {
+      provider: subscription.provider_id || null,
+      client_id: subscription.client_id || null,
+      services: subscription.services,
+      amount: parseFloat(subscription.amount) || 0,
       frequency: subscription.frequency,
       start_date: subscription.start_date,
-      next_due_date: subscription.due_date,
+      next_due_date: subscription.next_due_date,
       billing_url: subscription.billing_url,
-      cancellationUrl: subscription.cancellationUrl,
-      //status????
+      cancellation_url: subscription.cancellation_url,
+      status: subscription.status || "ACTIVE",
       notes: subscription.notes || "",
-    });
+    };
+
+    if (editingSubId) {
+      await window.api.updateSubscription({ id: editingSubId, ...payload });
+    } else {
+      await window.api.addSubscription(payload);
+    }
+
     setSubscription(DEFAULT_SUB);
+    setEditingSubId(null);
     setIsSubModalOpen(false);
     refreshData();
   }
 
   async function handleDeleteSub(id) {
+    if (!window.confirm("Delete this subscription?")) return;
     await window.api.deleteSubscription(id);
     refreshData();
   }
 
-  // Filter subscriptions based on the selected sidebar client
   const filteredSubs =
     selectedClientId === "all"
       ? subs
@@ -130,7 +218,7 @@ export default function App() {
             Clients
           </h2>
           <button
-            onClick={() => setIsClientModalOpen(true)} //open new client modal
+            onClick={openCreateClientModal}
             className="icon-add-btn"
             title="Add New Client"
           >
@@ -139,7 +227,6 @@ export default function App() {
         </div>
 
         <div className="client-list">
-          {/* "All" Filter Option */}
           <div
             onClick={() => setSelectedClientId("all")}
             className={`client-item ${selectedClientId === "all" ? "active" : ""}`}
@@ -153,7 +240,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Individual Client List */}
           {clients.map((c) => {
             const clientSubCount = subs.filter(
               (s) => s.client_id === c.id,
@@ -173,15 +259,15 @@ export default function App() {
                     className="avatar-img"
                     onError={(e) => {
                       e.target.style.display = "none";
-                      e.target.nextSibling.style.display = "flex";
+                      if (e.target.nextSibling) {
+                        e.target.nextSibling.style.display = "flex";
+                      }
                     }}
                   />
                 ) : null}
                 <div
                   className="avatar-fallback"
-                  style={{
-                    display: c.logo_url ? "none" : "flex",
-                  }}
+                  style={{ display: c.logo_url ? "none" : "flex" }}
                 >
                   {c.name.slice(0, 2).toUpperCase()}
                 </div>
@@ -189,9 +275,27 @@ export default function App() {
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <div className="truncate">{c.name}</div>
                   <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
-                    {clientSubCount}
+                    {clientSubCount}{" "}
                     {clientSubCount === 1 ? "subscription" : "subscriptions"}
                   </div>
+                </div>
+
+                {/* Client Edit and Delete Actions */}
+                <div className="action-buttons">
+                  <button
+                    onClick={(e) => openEditClientModal(c, e)}
+                    className="edit-btn"
+                    title="Edit client"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={(e) => handleDeleteClient(c.id, e)}
+                    className="delete-btn"
+                    title="Delete client"
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
             );
@@ -213,18 +317,7 @@ export default function App() {
               Showing {filteredSubs.length} subscriptions
             </p>
           </div>
-          <button
-            onClick={() => {
-              // Pre-select the active client in the form if one is highlighted
-              if (selectedClientId !== "all")
-                setSubscription((prev) => ({
-                  ...prev,
-                  client: selectedClientId, //pre-fill the client id for this new subscription
-                }));
-              setIsSubModalOpen(true);
-            }}
-            className="action-add-btn"
-          >
+          <button onClick={openCreateSubModal} className="action-add-btn">
             + Add Subscription
           </button>
         </div>
@@ -247,7 +340,7 @@ export default function App() {
               {filteredSubs.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="8"
                     style={{
                       textAlign: "center",
                       padding: 32,
@@ -264,20 +357,33 @@ export default function App() {
                       <strong>
                         {Array.isArray(s.services) && s.services.length > 0
                           ? s.services.join(", ")
-                          : s.provider || "Subscription"}
+                          : getProviderById(s.provider || s.provider_id)
+                              ?.name || "Subscription"}
                       </strong>
                     </td>
-                    <td style={{ color: "#94a3b8", flexDirection: "row" }}>
+                    <td
+                      className={s.client_url ? "link-style" : ""}
+                      onClick={() => {
+                        if (s.client_url) window.api.openLink(s.client_url);
+                      }}
+                    >
                       {s.client_name || "Unassigned / Personal"}
-                      {s.client_logo}
                     </td>
                     <td
-                      onClick={() =>
-                        s.billing_url && window.api.openLink(s.billing_url)
+                      className={
+                        getProviderById(s.provider || s.provider_id)?.url
+                          ? "link-style"
+                          : ""
                       }
-                      style={{ color: "#94a3b8" }}
+                      onClick={() => {
+                        const pUrl = getProviderById(
+                          s.provider || s.provider_id,
+                        )?.url;
+                        if (pUrl) window.api.openLink(pUrl);
+                      }}
                     >
-                      {s.provider || "-"}
+                      {getProviderById(s.provider || s.provider_id)?.name ||
+                        "-"}
                     </td>
                     <td>
                       ${Number(s.amount).toFixed(2)}{" "}
@@ -285,17 +391,26 @@ export default function App() {
                         / {s.frequency}
                       </span>
                     </td>
-                    <td>{s.start_date}</td>
-                    <td>{s.next_due_date}</td>
-                    <td>{s.notes}</td>
+                    <td>{s.start_date || "-"}</td>
+                    <td>{s.next_due_date || "-"}</td>
+                    <td>{s.notes || "-"}</td>
                     <td>
-                      <button
-                        onClick={() => handleDeleteSub(s.id)}
-                        className="delete-btn"
-                        title="Delete subscription"
-                      >
-                        ✕
-                      </button>
+                      <div className="action-buttons">
+                        <button
+                          onClick={() => openEditSubModal(s)}
+                          className="edit-btn"
+                          title="Edit subscription"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSub(s.id)}
+                          className="delete-btn"
+                          title="Delete subscription"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -305,22 +420,21 @@ export default function App() {
         </div>
       </main>
 
-      {/* ----------------- MODAL: ADD CLIENT ----------------- */}
+      {/* ----------------- MODAL: ADD / EDIT CLIENT ----------------- */}
       {isClientModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-box">
             <div className="modal-header">
-              <h3>Add New Client</h3>
+              <h3>{editingClientId ? "Edit Client" : "Add New Client"}</h3>
               <button
-                onClick={() => setIsClientModalOpen(false)} // close modal
+                onClick={() => setIsClientModalOpen(false)}
                 className="close-btn"
               >
                 ✕
               </button>
             </div>
-            <form onSubmit={handleAddClient}>
+            <form onSubmit={handleSaveClient}>
               <label className="form-label">Client Name *</label>
-              {/* CLIENT NAME */}
               <input
                 placeholder="e.g. Acme Studio"
                 value={client.name}
@@ -330,17 +444,31 @@ export default function App() {
                 required
                 className="form-input"
               />
-              {/* CLIENT LOGO -- MAYBE GET IT AUTOMATICALLY */}
+
               <label className="form-label">Logo Image URL (Optional)</label>
               <input
                 type="url"
                 placeholder="https://example.com/logo.png"
-                value={client.logo}
+                value={client.logo_url}
                 onChange={(e) =>
                   setClient((prev) => ({ ...prev, logo_url: e.target.value }))
                 }
                 className="form-input"
               />
+
+              <label className="form-label">
+                Client Website URL (Optional)
+              </label>
+              <input
+                type="url"
+                placeholder="https://client.com"
+                value={client.url}
+                onChange={(e) =>
+                  setClient((prev) => ({ ...prev, url: e.target.value }))
+                }
+                className="form-input"
+              />
+
               <div className="modal-actions">
                 <button
                   type="button"
@@ -350,7 +478,7 @@ export default function App() {
                   Cancel
                 </button>
                 <button type="submit" className="submit-btn">
-                  Save Client
+                  {editingClientId ? "Save Changes" : "Save Client"}
                 </button>
               </div>
             </form>
@@ -358,12 +486,12 @@ export default function App() {
         </div>
       )}
 
-      {/* ----------------- MODAL: ADD SUBSCRIPTION ----------------- */}
+      {/* ----------------- MODAL: ADD / EDIT SUBSCRIPTION ----------------- */}
       {isSubModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-box">
             <div className="modal-header">
-              <h3>Add Subscription</h3>
+              <h3>{editingSubId ? "Edit Subscription" : "Add Subscription"}</h3>
               <button
                 onClick={() => setIsSubModalOpen(false)}
                 className="close-btn"
@@ -371,15 +499,14 @@ export default function App() {
                 ✕
               </button>
             </div>
-            <form onSubmit={handleAddSub}>
-              {/* CLIENT */}
+            <form onSubmit={handleSaveSub}>
               <label className="form-label">Assign Client</label>
               <select
-                value={subscription.client}
+                value={subscription.client_id || ""}
                 onChange={(e) =>
                   setSubscription((prev) => ({
                     ...prev,
-                    client: e.target.value,
+                    client_id: e.target.value,
                   }))
                 }
                 className="form-input"
@@ -392,9 +519,25 @@ export default function App() {
                 ))}
               </select>
 
-              {/* SERVICE TYPE */}
+              <label className="form-label">Select Provider</label>
+              <select
+                value={subscription.provider_id || ""}
+                onChange={(e) =>
+                  setSubscription((prev) => ({
+                    ...prev,
+                    provider_id: e.target.value,
+                  }))
+                }
+                className="form-input"
+              >
+                <option value="">None</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || ""}
+                  </option>
+                ))}
+              </select>
 
-              <label className="form-label">Service Name *</label>
               <label className="form-label">Services *</label>
               <div
                 style={{
@@ -425,7 +568,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* SUBSCRIPTION AMOUNT */}
               <div className="form-row">
                 <div>
                   <label className="form-label">Amount (€) *</label>
@@ -445,7 +587,6 @@ export default function App() {
                   />
                 </div>
 
-                {/* SUBSCRIPTION FREQUENCY */}
                 <div>
                   <label className="form-label">Frequency</label>
                   <select
@@ -463,57 +604,52 @@ export default function App() {
                   </select>
                 </div>
               </div>
-              {/* START DATE */}
-              <label className="form-label">Start Date *</label>
+
+              <label className="form-label">Start Date</label>
               <input
                 type="date"
-                value={subscription.start_date}
+                value={subscription.start_date || ""}
                 onChange={(e) =>
                   setSubscription((prev) => ({
                     ...prev,
                     start_date: e.target.value,
                   }))
                 }
-                required
                 className="form-input"
               />
 
-              {/* NEXT BILLING */}
               <label className="form-label">Next Renewal Date *</label>
               <input
                 type="date"
-                value={subscription.due_date}
+                value={subscription.next_due_date || ""}
                 onChange={(e) =>
                   setSubscription((prev) => ({
                     ...prev,
-                    due_date: e.target.value,
+                    next_due_date: e.target.value,
                   }))
                 }
                 required
                 className="form-input"
               />
 
-              {/* NOTES */}
               <label className="form-label">Notes</label>
               <input
                 type="text"
-                value={subscription.notes}
+                value={subscription.notes || ""}
                 onChange={(e) =>
                   setSubscription((prev) => ({
                     ...prev,
                     notes: e.target.value,
                   }))
                 }
-                required
                 className="form-input"
               />
 
-              {/* Billing URL */}
               <label className="form-label">Billing Portal URL</label>
               <input
                 type="url"
                 placeholder="https://..."
-                value={subscription.billing_url}
+                value={subscription.billing_url || ""}
                 onChange={(e) =>
                   setSubscription((prev) => ({
                     ...prev,
@@ -522,6 +658,7 @@ export default function App() {
                 }
                 className="form-input"
               />
+
               <div className="modal-actions">
                 <button
                   type="button"
@@ -531,7 +668,7 @@ export default function App() {
                   Cancel
                 </button>
                 <button type="submit" className="submit-btn">
-                  Track Subscription
+                  {editingSubId ? "Save Changes" : "Track Subscription"}
                 </button>
               </div>
             </form>

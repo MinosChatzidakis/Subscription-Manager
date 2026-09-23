@@ -12,6 +12,7 @@ db.serialize(() => {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       logo_url TEXT,
+      url TEXT
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `,
@@ -25,7 +26,7 @@ db.serialize(() => {
     `
     CREATE TABLE IF NOT EXISTS subscriptions (
       id TEXT PRIMARY KEY,
-      provider TEXT,
+      provider_id TEXT,
       client_id TEXT,
       billing_url TEXT,
       cancellation_url TEXT,
@@ -64,6 +65,19 @@ db.serialize(() => {
       former_status TEXT NOT NULL CHECK(former_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
       new_status TEXT NOT NULL CHECK(new_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
       timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`,
+    (err) => {
+      if (err)
+        console.error("Error in status_change table syntax:", err.message);
+    },
+  );
+
+  db.run(
+    `
+    CREATE TABLE IF NOT EXISTS providers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      url TEXT
   )`,
     (err) => {
       if (err)

@@ -152,6 +152,10 @@ button {
   background: #334155;
 }
 
+.edit-btn {
+  margin: 8px;
+}
+
 .action-add-btn {
   background: #2563eb;
   color: #fff;
@@ -307,4 +311,14 @@ button {
 .cancel-btn:hover {
   background: #334155;
   color: #f1f5f9;
+}
+
+.link-style {
+  cursor: pointer;
+  text-decoration: none;
+  color: #38bdf8;
+}
+
+.link-style:hover {
+  text-decoration: underline;
 }
