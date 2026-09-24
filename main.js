@@ -56,10 +56,14 @@ app.on("window-all-closed", () => {
 // ----------------------------------------------------
 ipcMain.handle("clients:getAll", () => {
   return new Promise((resolve, reject) => {
-    db.all("SELECT * FROM clients ORDER BY name ASC", [], (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows || []);
-    });
+    db.all(
+      "SELECT id, name, logo_url, url FROM clients ORDER BY name ASC",
+      [],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      },
+    );
   });
 });
 
@@ -101,7 +105,6 @@ ipcMain.handle("clients:update", (event, client) => {
   });
 });
 
-// Ensure your client delete channel matches preload.js ("clients:delete")
 ipcMain.handle("clients:delete", (event, id) => {
   return new Promise((resolve, reject) => {
     db.run("DELETE FROM clients WHERE id = ?", [id], function (err) {
@@ -154,9 +157,11 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
+    const providerId = sub.provider_id || sub.provider || null;
+
     const params = [
       subId,
-      sub.provider ? sub.provider.trim() : "",
+      providerId ? String(providerId).trim() : null, // Clean provider ID
       sub.client_id || null,
       sub.billing_url ? sub.billing_url.trim() : null,
       sub.cancellation_url ? sub.cancellation_url.trim() : null,
@@ -330,6 +335,46 @@ ipcMain.handle("providers:getAll", (event) => {
     db.all(query, [], function (err, rows) {
       if (err) reject(err);
       else resolve(rows || []);
+    });
+  });
+});
+
+ipcMain.handle("providers:add", (event, { name, url }) => {
+  return new Promise((resolve, reject) => {
+    const uid = uuidv4();
+    const query = "INSERT INTO providers (id, name, url) VALUES ( ?, ?, ?)";
+    const params = [uid, name ? name.trim() : "", url ? url.trim() : ""];
+    db.run(query, params, function (err) {
+      if (err) reject(err);
+      else resolve({ uid, name, url });
+    });
+  });
+});
+
+ipcMain.handle("providers:update", (event, provider) => {
+  return new Promise((resolve, reject) => {
+    const query = `
+      UPDATE providers 
+      SET name = ?, url = ?
+      WHERE id = ?
+    `;
+    const params = [
+      provider.name ? provider.name.trim() : "",
+      provider.url ? provider.url.trim() : null,
+      provider.id,
+    ];
+    db.run(query, params, function (err) {
+      if (err) reject(err);
+      else resolve({ ...provider });
+    });
+  });
+});
+
+ipcMain.handle("providers:delete", (event, id) => {
+  return new Promise((resolve, reject) => {
+    db.run("DELETE FROM providers WHERE id = ?", [id], function (err) {
+      if (err) reject(err);
+      else resolve({ success: true });
     });
   });
 });

@@ -12,7 +12,7 @@ db.serialize(() => {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       logo_url TEXT,
-      url TEXT
+      url TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `,
