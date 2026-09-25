@@ -378,3 +378,8 @@ ipcMain.handle("providers:delete", (event, id) => {
     });
   });
 });
+
+// ----------------------------------------------------
+// IPC: Providers
+// ----------------------------------------------------
+ipcMain.handle("statusChanges:getSubscription", (event, { id }) => {});

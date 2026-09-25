@@ -61,7 +61,7 @@ db.serialize(() => {
     `
     CREATE TABLE IF NOT EXISTS status_changes (
       id TEXT PRIMARY KEY,
-      subscription TEXT,
+      subscription_id TEXT,
       former_status TEXT NOT NULL CHECK(former_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
       new_status TEXT NOT NULL CHECK(new_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
       timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP

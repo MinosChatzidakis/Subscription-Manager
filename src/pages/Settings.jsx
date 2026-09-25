@@ -17,21 +17,6 @@ const SettingsPage = () => {
   const [editingId, setEditingId] = useState(null); // null when creating, number/string when editing
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  /*   // 1. Fetch initial providers from SQLite via IPC
-  const fetchProviders = async () => {
-    try {
-      const data = await window.api.getProviders();
-      setProviders(data || []);
-      //! add to context
-    } catch (err) {
-      console.error("Failed to load providers:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchProviders();
-  }, []); */
-
   // 2. Open modal for Add
   const handleOpenAddModal = () => {
     setEditingId(null);

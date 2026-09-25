@@ -16,10 +16,15 @@ export default function App() {
   // Modal toggles
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
 
   // Tracks edit mode (null = adding new, string ID = updating existing)
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingSubId, setEditingSubId] = useState(null);
+
+  //sort term
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState(1);
 
   const DEFAULT_CLIENT = { name: "", logo_url: "", url: "" };
   const [client, setClient] = useState(DEFAULT_CLIENT);
@@ -38,6 +43,22 @@ export default function App() {
     notes: "",
   };
   const [subscription, setSubscription] = useState(DEFAULT_SUB);
+
+  const [statusChanges, setStatusChanges] = useState([]);
+
+  const handleOpenStatusModal = async (subId) => {
+    setEditingSubId(subId);
+    setIsStatusModalOpen(true);
+
+    try {
+      const data = await window.api.getStatusChanges(subId);
+      setStatusChanges(data || []);
+    } catch (err) {
+      console.error("Failed to load status history:", err);
+      window.alert("Something went wrong, please try again later");
+      setIsStatusModalOpen(false);
+    }
+  };
 
   //const [providers, setProviders] = useState(AVAILABLE_PROVIDERS); //change this
   const getProviderById = (id) => providers.find((p) => p.id === id);
@@ -80,6 +101,17 @@ export default function App() {
       };
     });
   }
+
+  const handleHeaderClick = (columnKey) => {
+    if (sortBy === columnKey) {
+      // If clicking the active sort column, invert direction
+      setSortOrder((prev) => prev * -1);
+    } else {
+      // New column: set key and default to ascending
+      setSortBy(columnKey);
+      setSortOrder(1);
+    }
+  };
 
   // --- CLIENT ACTIONS ---
   function openCreateClientModal() {
@@ -357,14 +389,55 @@ export default function App() {
           <table>
             <thead>
               <tr>
-                <th>SERVICE</th>
-                <th>ASSIGNED CLIENT</th>
-                <th>PROVIDER</th>
-                <th>COST</th>
-                <th>START DATE</th>
-                <th>NEXT DUE</th>
-                <th>NOTES</th>
-                <th>ACTIONS</th>
+                <th
+                  onClick={() => handleHeaderClick("services_str")}
+                  style={sortBy === "services_str" ? { color: "orange" } : {}}
+                >
+                  SERVICE
+                </th>
+                {/* Fixed: Removed stray parenthesis */}
+                <th
+                  onClick={() => handleHeaderClick("client_name")}
+                  style={sortBy === "client_name" ? { color: "orange" } : {}}
+                >
+                  ASSIGNED CLIENT
+                </th>
+                <th
+                  onClick={() => handleHeaderClick("provider_id")}
+                  style={sortBy === "provider_id" ? { color: "orange" } : {}}
+                >
+                  PROVIDER
+                </th>
+                <th
+                  onClick={() => handleHeaderClick("amount")}
+                  style={sortBy === "amount" ? { color: "orange" } : {}}
+                >
+                  COST
+                </th>
+                <th
+                  onClick={() => handleHeaderClick("start_date")}
+                  style={sortBy === "start_date" ? { color: "orange" } : {}}
+                >
+                  START DATE
+                </th>
+                <th
+                  onClick={() => handleHeaderClick("next_due_date")}
+                  style={sortBy === "next_due_date" ? { color: "orange" } : {}}
+                >
+                  NEXT DUE
+                </th>
+                <th
+                  onClick={() => handleHeaderClick("status")}
+                  style={sortBy === "status" ? { color: "orange" } : {}}
+                >
+                  STATUS
+                </th>
+                <th
+                  onClick={() => handleHeaderClick("notes")}
+                  style={sortBy === "notes" ? { color: "orange" } : {}}
+                >
+                  NOTES
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -382,69 +455,94 @@ export default function App() {
                   </td>
                 </tr>
               ) : (
-                filteredSubs.map((s) => (
-                  <tr key={s.id}>
-                    <td>
-                      <strong>
-                        {Array.isArray(s.services) && s.services.length > 0
-                          ? s.services.join(", ")
-                          : getProviderById(s.provider || s.provider_id)
-                              ?.name || "Subscription"}
-                      </strong>
-                    </td>
-                    <td
-                      className={s.client_url ? "link-style" : ""}
-                      onClick={() => {
-                        if (s.client_url) window.api.openLink(s.client_url);
-                      }}
-                    >
-                      {s.client_name || "Unassigned / Personal"}
-                    </td>
-                    <td
-                      className={
-                        getProviderById(s.provider || s.provider_id)?.url
-                          ? "link-style"
-                          : ""
-                      }
-                      onClick={() => {
-                        const pUrl = getProviderById(
-                          s.provider || s.provider_id,
-                        )?.url;
-                        if (pUrl) window.api.openLink(pUrl);
-                      }}
-                    >
-                      {getProviderById(s.provider || s.provider_id)?.name ||
-                        "-"}
-                    </td>
-                    <td>
-                      ${Number(s.amount).toFixed(2)}{" "}
-                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                        / {s.frequency}
-                      </span>
-                    </td>
-                    <td>{s.start_date || "-"}</td>
-                    <td>{s.next_due_date || "-"}</td>
-                    <td>{s.notes || "-"}</td>
-                    <td>
-                      <div className="action-buttons">
-                        <button
-                          onClick={() => openEditSubModal(s)}
-                          className="edit-btn"
-                          title="Edit subscription"
+                filteredSubs
+                  .sort((a, b) => {
+                    if (sortBy === "amount") {
+                      //compare numerical values
+                      return ((a.amount || 0) - (b.amount || 0)) * sortOrder;
+                    }
+
+                    return (
+                      String(a[sortBy] ?? "").localeCompare(
+                        String(b[sortBy] ?? ""),
+                      ) * sortOrder
+                    );
+                  })
+                  .map((s) => {
+                    return (
+                      <tr key={s.id}>
+                        <td>
+                          <strong>
+                            {Array.isArray(s.services) && s.services.length > 0
+                              ? s.services.join(", ")
+                              : getProviderById(s.provider || s.provider_id)
+                                  ?.name || "Subscription"}
+                          </strong>
+                        </td>
+                        <td
+                          className={s.client_url ? "link-style" : ""}
+                          onClick={() => {
+                            if (s.client_url) window.api.openLink(s.client_url);
+                          }}
                         >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSub(s.id)}
-                          className="delete-btn"
-                          title="Delete subscription"
+                          {s.client_name || "Unassigned / Personal"}
+                        </td>
+                        <td
+                          className={
+                            getProviderById(s.provider || s.provider_id)?.url
+                              ? "link-style"
+                              : ""
+                          }
+                          onClick={() => {
+                            const pUrl = getProviderById(
+                              s.provider || s.provider_id,
+                            )?.url;
+                            if (pUrl) window.api.openLink(pUrl);
+                          }}
                         >
-                          ✕
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {getProviderById(s.provider || s.provider_id)?.name ||
+                            "-"}
+                        </td>
+                        <td>
+                          ${Number(s.amount).toFixed(2)}{" "}
+                          <span
+                            style={{ fontSize: "0.75rem", color: "#64748b" }}
+                          >
+                            / {s.frequency}
+                          </span>
+                        </td>
+                        <td>{s.start_date || "-"}</td>
+                        <td>{s.next_due_date || "-"}</td>
+                        <td
+                          className="link-style"
+                          onClick={() => {
+                            handleOpenStatusModal(s.id);
+                          }}
+                        >
+                          {s.status || "-"}
+                        </td>
+                        <td>{s.notes || "-"}</td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              onClick={() => openEditSubModal(s)}
+                              className="edit-btn"
+                              title="Edit subscription"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSub(s.id)}
+                              className="delete-btn"
+                              title="Delete subscription"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
               )}
             </tbody>
           </table>
@@ -667,6 +765,42 @@ export default function App() {
             }
             className="form-input"
           />
+        </Modal>
+      )}
+
+      {isStatusModalOpen && (
+        <Modal
+          closeModal={() => {
+            setEditingSubId(null);
+            setIsStatusModalOpen(false);
+            setStatusChanges([]);
+          }}
+          message="Status History"
+          saveMessage="Close"
+        >
+          {statusChanges.length === 0 ? (
+            <p style={{ color: "#94a3b8" }}>No status changes recorded.</p>
+          ) : (
+            statusChanges.map((change) => (
+              <div
+                key={change.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "8px 0",
+                  borderBottom: "1px solid #334155",
+                }}
+              >
+                <span>
+                  {change.former_status} &rarr;{" "}
+                  <strong>{change.new_status}</strong>
+                </span>
+                <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  {change.timestamp}
+                </span>
+              </div>
+            ))
+          )}
         </Modal>
       )}
     </div>
