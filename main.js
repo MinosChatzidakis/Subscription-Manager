@@ -124,7 +124,7 @@ ipcMain.handle("subscriptions:getAll", () => {
         s.*, 
         c.name AS client_name,
         c.url as client_url,
-        c.logo_url as client_logo,
+        c.logo_url as client_logo
       FROM subscriptions s
       LEFT JOIN clients c ON s.client_id = c.id
       GROUP BY s.id
@@ -137,22 +137,28 @@ ipcMain.handle("subscriptions:getAll", () => {
       // Append services array to each row before sending to React
       const formatted = (rows || []).map((row) => ({
         ...row,
-        services: row.services_str ? row.services_str.split("||") : [],
+        services: row.services_str ? row.services_str.split(", ") : [],
       }));
 
-      resolve(formatted);
+      resolve(formatted); //send back services as an array which is what the frontend expects to operate
     });
   });
 });
 
 ipcMain.handle("subscriptions:add", (event, sub) => {
   return new Promise((resolve, reject) => {
+    const servicesArray = sub.services;
+    let servicesStr;
+    if (servicesArray && Array.isArray(servicesArray)) {
+      servicesStr = servicesArray.join(", ");
+    }
+
     const subId = uuidv4();
 
     const query = `
       INSERT INTO subscriptions 
-      (id, provider_id, client_id, billing_url, cancellation_url, amount, frequency, start_date, next_due_date, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, provider_id, client_id, billing_url, cancellation_url, amount, frequency, start_date, next_due_date, status, notes, services_str)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const providerId = sub.provider_id || sub.provider || null;
@@ -169,63 +175,27 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
       sub.next_due_date || null,
       (sub.status || "active").toLowerCase(),
       sub.notes || "",
+      servicesStr || "",
     ];
 
-    db.serialize(() => {
-      let failed = false;
-
-      // 1. Begin transaction
-      db.run("BEGIN TRANSACTION", (err) => {
-        if (err) {
-          failed = true;
-          return reject(err);
-        }
-      });
-
-      // 2. Insert main subscription record
-      db.run(query, params, function (err) {
-        if (err && !failed) {
-          failed = true;
-          db.run("ROLLBACK");
-          return reject(err);
-        }
-      });
-
-      // 3. Insert child services (if any)
-      if (Array.isArray(sub.services) && sub.services.length > 0) {
-        const stmt = db.prepare(
-          "INSERT INTO services (id, subscription_id, name) VALUES (?, ?, ?)",
-        );
-
-        for (const service of sub.services) {
-          stmt.run([uuidv4(), subId, String(service).trim()], (err) => {
-            if (err && !failed) {
-              failed = true;
-              db.run("ROLLBACK");
-              return reject(err);
-            }
-          });
-        }
-        stmt.finalize();
+    db.run(query, params, function (err) {
+      if (err) {
+        reject(err.message);
+      } else {
+        resolve({ success: true });
       }
-
-      // 4. COMMIT - ONLY resolve here!
-      db.run("COMMIT", function (err) {
-        if (err && !failed) {
-          db.run("ROLLBACK");
-          return reject(err);
-        }
-        if (!failed) {
-          // React only continues when the disk write is 100% complete
-          resolve({ id: subId, ...sub });
-        }
-      });
     });
   });
 });
 
 ipcMain.handle("subscriptions:update", (event, sub) => {
   return new Promise((resolve, reject) => {
+    const servicesArray = sub.services;
+    let servicesStr;
+    if (servicesArray && Array.isArray(servicesArray)) {
+      servicesStr = servicesArray.join(", "); //disassemble the services array
+    }
+
     const subQuery = `SELECT status FROM subscriptions WHERE id = ?`;
 
     db.get(subQuery, [sub.id], (error, row) => {
@@ -257,7 +227,7 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
         const updateQuery = `
           UPDATE subscriptions 
           SET provider_id = ?, client_id = ?, billing_url = ?, cancellation_url = ?, 
-              amount = ?, frequency = ?, start_date = ?, next_due_date = ?, status = ?, notes = ?
+              amount = ?, frequency = ?, start_date = ?, next_due_date = ?, status = ?, notes = ?, services_str = ?
           WHERE id = ?
         `;
         const updateParams = [
@@ -271,6 +241,7 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
           sub.next_due_date || null,
           newStatus,
           sub.notes ? sub.notes.trim() : "",
+          //!
           sub.id,
         ];
 
@@ -296,36 +267,6 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
               }
             },
           );
-        }
-
-        // 5. Refresh linked services: delete old ones
-        db.run(
-          "DELETE FROM services WHERE subscription_id = ?",
-          [sub.id],
-          function (err) {
-            if (err && !failed) {
-              failed = true;
-              db.run("ROLLBACK");
-              return reject(err);
-            }
-          },
-        );
-
-        // 6. Insert new services
-        if (Array.isArray(sub.services) && sub.services.length > 0) {
-          const stmt = db.prepare(
-            "INSERT INTO services (id, subscription_id, name) VALUES (?, ?, ?)",
-          );
-          for (const service of sub.services) {
-            stmt.run([uuidv4(), sub.id, String(service).trim()], (err) => {
-              if (err && !failed) {
-                failed = true;
-                db.run("ROLLBACK");
-                return reject(err);
-              }
-            });
-          }
-          stmt.finalize();
         }
 
         // 7. Commit changes
@@ -362,9 +303,9 @@ ipcMain.handle("utils:openLink", async (event, url) => {
 // ----------------------------------------------------
 // IPC: available_services
 // ----------------------------------------------------
-ipcMain.handle("available_services:getAll", (event) => {
+ipcMain.handle("presets:getAll", (event) => {
   return new Promise((resolve, reject) => {
-    const query = "SELECT * FROM available_services";
+    const query = "SELECT * FROM presets";
     db.all(query, [], function (err, rows) {
       if (err) reject(err);
       else resolve(rows || []);
@@ -373,13 +314,20 @@ ipcMain.handle("available_services:getAll", (event) => {
 });
 
 ipcMain.handle(
-  "available_services:add",
-  (event, { service_name, provider_name, amount, frequency, url }) => {
+  "presets:add",
+  (
+    event,
+    { service_name, provider_name, amount, frequency, services, url },
+  ) => {
+    let servicesStr;
+    if (services && Array.isArray(services)) {
+      servicesStr = services.join(", ");
+    }
     return new Promise((resolve, reject) => {
       const uid = uuidv4();
       console.log(frequency);
       const query =
-        "INSERT INTO available_services (id, service_name, provider_name, amount, frequency, url) VALUES ( ?, ?, ?, ?, ?, ?)";
+        "INSERT INTO presets (id, service_name, provider_name, amount, frequency, services_str, url) VALUES ( ?, ?, ?, ?, ?, ?, ?)";
       const params = [
         uid,
         service_name ? service_name.trim() : "",
@@ -388,6 +336,7 @@ ipcMain.handle(
         frequency in Array.from(("monthly", "anualy", "bi-anualy"))
           ? frequency.trim()
           : "anualy",
+        servicesStr || "",
         url ? url.trim() : "",
       ];
       db.run(query, params, function (err) {
@@ -398,20 +347,26 @@ ipcMain.handle(
   },
 );
 
-ipcMain.handle("available_services:update", (event, service) => {
+ipcMain.handle("presets:update", (event, preset) => {
+  const servicesArray = preset.services;
+  let servicesStr;
+  if (servicesArray && Array.isArray(servicesArray)) {
+    servicesStr = servicesArray.join(", ");
+  }
   return new Promise((resolve, reject) => {
     const query = `
-      UPDATE available_services 
-      SET service_name = ?, provider_name = ?, amount = ?, frequency = ?, url = ?
+      UPDATE presets 
+      SET service_name = ?, provider_name = ?, amount = ?, frequency = ?, services_str = ?, url = ?
       WHERE id = ?
     `;
     const params = [
-      service.service_name ? service.service_name.trim() : "",
-      service.provider_name ? service.provider_name.trim() : "",
-      service.amount || 0,
-      service.frequency || "",
-      service.url ? service.url.trim() : null,
-      service.id,
+      preset.service_name ? preset.service_name.trim() : "",
+      preset.provider_name ? preset.provider_name.trim() : "",
+      preset.amount || 0,
+      preset.frequency || "",
+      servicesStr || "",
+      preset.url ? preset.url.trim() : null,
+      preset.id,
     ];
     db.run(query, params, function (err) {
       if (err) reject(err);
@@ -420,9 +375,9 @@ ipcMain.handle("available_services:update", (event, service) => {
   });
 });
 
-ipcMain.handle("available_services:delete", (event, id) => {
+ipcMain.handle("presets:delete", (event, id) => {
   return new Promise((resolve, reject) => {
-    db.run("DELETE FROM available_services WHERE id = ?", [id], function (err) {
+    db.run("DELETE FROM presets WHERE id = ?", [id], function (err) {
       if (err) reject(err);
       else resolve({ success: true });
     });

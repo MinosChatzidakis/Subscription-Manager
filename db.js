@@ -36,7 +36,7 @@ db.serialize(() => {
       next_due_date TEXT NOT NULL,
       status TEXT CHECK(status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
       notes TEXT,
-      services TEXT
+      services_str TEXT
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `,
@@ -69,7 +69,7 @@ db.serialize(() => {
       provider_name TEXT,
       amount REAL DEFAULT 0,
       frequency TEXT NOT NULL CHECK (frequency IN ('monthly', 'anualy', 'bi-anualy')),
-      services TEXT
+      services_str TEXT
       url TEXT
   )`,
     (err) => {
