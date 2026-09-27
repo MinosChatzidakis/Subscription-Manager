@@ -36,24 +36,13 @@ db.serialize(() => {
       next_due_date TEXT NOT NULL,
       status TEXT CHECK(status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
       notes TEXT,
+      services TEXT
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `,
     (err) => {
       if (err)
         console.error("Error in subscriptions table syntax:", err.message);
-    },
-  );
-
-  db.run(
-    `
-    CREATE TABLE IF NOT EXISTS services (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    subscription_id TEXT NOT NULL
-    )`,
-    (err) => {
-      if (err) console.error("Error in services table syntax:", err.message);
     },
   );
 
@@ -74,14 +63,18 @@ db.serialize(() => {
 
   db.run(
     `
-    CREATE TABLE IF NOT EXISTS providers (
+    CREATE TABLE IF NOT EXISTS presets (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
+      service_name TEXT NOT NULL,
+      provider_name TEXT,
+      amount REAL DEFAULT 0,
+      frequency TEXT NOT NULL CHECK (frequency IN ('monthly', 'anualy', 'bi-anualy')),
+      services TEXT
       url TEXT
   )`,
     (err) => {
       if (err)
-        console.error("Error in status_change table syntax:", err.message);
+        console.error("Error in available_services table syntax:", err.message);
     },
   );
 });

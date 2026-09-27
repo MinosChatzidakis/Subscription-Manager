@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import "./SubscriptionsPage.css";
 import { useNavigate } from "react-router-dom";
-import { useProviders } from "../Context/providersContext";
+import { useServices } from "../Context/ServicesContext";
 import Modal from "../Components/Modal";
 
 export default function App() {
@@ -10,7 +10,7 @@ export default function App() {
   const [subs, setSubs] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("all");
 
-  const { providers } = useProviders();
+  const { services } = useServices();
   const navigate = useNavigate();
 
   // Modal toggles
@@ -48,7 +48,6 @@ export default function App() {
 
   const handleOpenStatusModal = async (subId) => {
     setEditingSubId(subId);
-    setIsStatusModalOpen(true);
 
     try {
       const data = await window.api.getStatusChanges(subId);
@@ -58,10 +57,10 @@ export default function App() {
       window.alert("Something went wrong, please try again later");
       setIsStatusModalOpen(false);
     }
+    setIsStatusModalOpen(true);
   };
 
-  //const [providers, setProviders] = useState(AVAILABLE_PROVIDERS); //change this
-  const getProviderById = (id) => providers.find((p) => p.id === id);
+  const getProviderById = (id) => services.find((p) => p.id === id);
 
   async function refreshData() {
     const [c, s] = await Promise.all([
@@ -82,6 +81,15 @@ export default function App() {
     "Domain",
     "Maintenance",
     "SEO",
+  ];
+
+  const AVAILABLE_STATUS = [
+    "ACTIVE",
+    "PAUSED",
+    "CANCELED",
+    "PAST_DUE",
+    "INVOICE_ISSUED",
+    "INVOICE_PAID",
   ];
 
   function handleServiceToggle(service) {
@@ -617,7 +625,6 @@ export default function App() {
           >
             <option value="">None (Personal / Unassigned)</option>
             {clients.map((c) => {
-              console.log(c);
               return (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -626,19 +633,19 @@ export default function App() {
             })}
           </select>
 
-          <label className="form-label">Select Provider</label>
+          <label className="form-label">Select Service</label>
           <select
-            value={subscription.provider_id || ""}
+            value={subscription.provider_id || ""} //!here
             onChange={(e) =>
               setSubscription((prev) => ({
                 ...prev,
-                provider_id: e.target.value,
+                provider_id: e.target.value, //!here -- if edited, set the service_id field as null otherwise keep it full to signal the service preset
               }))
             }
             className="form-input"
           >
             <option value="">None</option>
-            {providers.map((p) => (
+            {services.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name || ""}
               </option>
@@ -739,6 +746,29 @@ export default function App() {
             className="form-input"
           />
 
+          {/* Status */}
+          <label className="form-label">Status</label>
+          <select
+            value={subscription.status || ""}
+            onChange={
+              (e) =>
+                setSubscription((prev) => ({
+                  ...prev,
+                  status: e.target.value,
+                }))
+              //!log status change
+            }
+            className="form-input"
+          >
+            {AVAILABLE_STATUS.map((status) => {
+              return (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              );
+            })}
+          </select>
+
           <label className="form-label">Notes</label>
           <input
             type="text"
@@ -747,20 +777,6 @@ export default function App() {
               setSubscription((prev) => ({
                 ...prev,
                 notes: e.target.value,
-              }))
-            }
-            className="form-input"
-          />
-
-          <label className="form-label">Billing Portal URL</label>
-          <input
-            type="url"
-            placeholder="https://..."
-            value={subscription.billing_url || ""}
-            onChange={(e) =>
-              setSubscription((prev) => ({
-                ...prev,
-                billing_url: e.target.value,
               }))
             }
             className="form-input"

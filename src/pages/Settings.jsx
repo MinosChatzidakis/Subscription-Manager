@@ -1,42 +1,48 @@
 import { useState, useEffect } from "react";
 import Modal from "../Components/Modal";
 import "./SubscriptionsPage.css";
-import { useProviders } from "../Context/providersContext";
+import { useServices } from "../Context/ServicesContext";
 import { useNavigate } from "react-router-dom";
 
 const SettingsPage = () => {
-  const DEFAULT_PROVIDER = {
-    name: "",
+  const DEFAULT_SERVICE = {
+    service_name: "",
+    provider_name: "",
+    frequency: "yearly",
+    amount: 0,
     url: "",
   };
 
-  const { providers, setProviders, fetchProviders } = useProviders();
+  const { services, setServices, fetchServices } = useServices();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState(DEFAULT_PROVIDER);
+  const [form, setForm] = useState(DEFAULT_SERVICE);
   const [editingId, setEditingId] = useState(null); // null when creating, number/string when editing
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 2. Open modal for Add
   const handleOpenAddModal = () => {
     setEditingId(null);
-    setForm(DEFAULT_PROVIDER);
+    setForm(DEFAULT_SERVICE);
     setIsModalOpen(true);
   };
 
   // 3. Open modal for Edit
-  const handleOpenEditModal = (provider) => {
-    setEditingId(provider.id);
+  const handleOpenEditModal = (service) => {
+    setEditingId(service.id);
     setForm({
-      name: provider.name,
-      url: provider.url,
+      service_name: service.service_name || "",
+      provider_name: service.provider_name || "",
+      amount: service.amount || 0,
+      frequency: service.frequency || "",
+      url: service.url || "",
     });
     setIsModalOpen(true);
   };
 
   // 4. Close modal and reset form
   const handleCloseModal = () => {
-    setForm(DEFAULT_PROVIDER);
+    setForm(DEFAULT_SERVICE);
     setEditingId(null);
     setIsModalOpen(false);
   };
@@ -47,53 +53,59 @@ const SettingsPage = () => {
 
     try {
       if (editingId !== null) {
-        // a provider has been edited
+        // a service has been edited
         // UPDATE in SQLite: send id + payload
-        await window.api.updateProvider({
+        await window.api.updateService({
           id: editingId,
-          name: form.name.trim(),
-          url: form.url.trim(),
+          service_name: form.service_name.trim() || "",
+          provider_name: form.provider_name.trim() || "",
+          amount: form.amount || 0,
+          frequency: form.frequency.trim() || "",
+          url: form.url.trim() || "",
         });
       } else {
-        // a new provider has been added
-        await window.api.createProvider({
-          name: form.name.trim(),
-          url: form.url.trim(),
+        // a new service has been added
+        await window.api.createService({
+          service_name: form.service_name.trim() || "",
+          provider_name: form.provider_name.trim() || "",
+          amount: form.amount || 0,
+          frequency: form.frequency.trim() || "",
+          url: form.url.trim() || "",
         });
       }
 
-      fetchProviders(); //refresh
+      fetchServices(); //refresh
       handleCloseModal();
     } catch (err) {
-      console.error("Failed to save provider:", err);
-      alert("Error saving provider. Check logs.");
+      console.error("Failed to save service:", err);
+      alert("Error saving service. Check logs.");
     }
   };
 
   // 6. Delete handler
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this provider?"))
+    if (!window.confirm("Are you sure you want to delete this service?"))
       return;
     try {
-      await window.api.deleteProvider(id);
-      fetchProviders();
+      await window.api.deleteService(id);
+      fetchServices();
     } catch (err) {
-      console.error("Failed to delete provider:", err);
+      console.error("Failed to delete service:", err);
     }
   };
 
   return (
     <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto" }}>
-      <h2>Provider Settings</h2>
+      <h2>Service Settings</h2>
 
-      {/* Provider List */}
+      {/* service List */}
       <div style={{ marginBottom: "20px" }}>
-        {providers.length === 0 ? (
-          <p>No providers configured yet.</p>
+        {services.length === 0 ? (
+          <p>No services configured yet.</p>
         ) : (
-          providers.map((provider) => (
+          services.map((service) => (
             <div
-              key={provider.id}
+              key={service.id}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -105,17 +117,17 @@ const SettingsPage = () => {
               }}
             >
               <div>
-                <strong>{provider.name}</strong>
+                <strong>{`${service.service_name} (${service.provider_name})`}</strong>
                 <div style={{ fontSize: "0.85em", color: "#666" }}>
-                  {provider.url}
+                  {service.url}
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => handleOpenEditModal(provider)}>
+                <button onClick={() => handleOpenEditModal(service)}>
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(provider.id)}
+                  onClick={() => handleDelete(service.id)}
                   style={{ color: "red" }}
                 >
                   Delete
@@ -127,7 +139,7 @@ const SettingsPage = () => {
       </div>
 
       {/* Add Button */}
-      <button onClick={handleOpenAddModal}>Add Provider</button>
+      <button onClick={handleOpenAddModal}>Add Service</button>
       <button onClick={() => navigate("/")}>Home Screen</button>
 
       {/* Modal */}
@@ -135,23 +147,59 @@ const SettingsPage = () => {
         <Modal
           closeModal={() => setIsModalOpen(false)}
           onSave={handleSave}
-          message={editingId !== null ? "Edit Provider" : "Add Provider"}
+          message={editingId !== null ? "Edit Service" : "Add Service"}
           saveMessage={editingId !== null ? "Save Changes" : "Create"}
         >
-          <label className="form-label">Name</label>
+          <label className="form-label">Service Name</label>
           <input
             type="text"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="e.g. AWS SNS, Twilio"
-            /* style={{
-              width: "100%",
-              padding: "8px",
-              boxSizing: "border-box",
-            }} */
+            value={form.service_name}
+            onChange={(e) => setForm({ ...form, service_name: e.target.value })}
+            placeholder="e.g. Cookies, Domain etc"
             className="form-input"
             required
           />
+
+          <label className="form-label">service Name</label>
+          <input
+            type="text"
+            value={form.provider_name}
+            onChange={(e) =>
+              setForm({ ...form, provider_name: e.target.value })
+            }
+            placeholder="e.g.Cloudfare"
+            className="form-input"
+            required
+          />
+
+          <label className="form-label">amount</label>
+          <input
+            type="number"
+            value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            className="form-input"
+            required
+          />
+
+          <label className="form-label">Frequency</label>
+          <select
+            value={form.frequency || ""}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                frequency: e.target.value,
+              }))
+            }
+            className="form-input"
+          >
+            {["monthly", "anualy", "bi-anualy"].map((f) => {
+              return (
+                <option key={`frequency: ${f}`} value={f}>
+                  {f}
+                </option>
+              );
+            })}
+          </select>
 
           <label className="form-label">URL</label>
           <input
@@ -159,13 +207,7 @@ const SettingsPage = () => {
             value={form.url}
             onChange={(e) => setForm({ ...form, url: e.target.value })}
             placeholder="https://api.example.com"
-            /* style={{
-              width: "100%",
-              padding: "8px",
-              boxSizing: "border-box",
-            }} */
             className="form-input"
-            required
           />
         </Modal>
       )}

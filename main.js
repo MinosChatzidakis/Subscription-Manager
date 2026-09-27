@@ -125,10 +125,8 @@ ipcMain.handle("subscriptions:getAll", () => {
         c.name AS client_name,
         c.url as client_url,
         c.logo_url as client_logo,
-        GROUP_CONCAT(ss.name, '||') AS services_str
       FROM subscriptions s
       LEFT JOIN clients c ON s.client_id = c.id
-      LEFT JOIN services ss ON s.id = ss.subscription_id
       GROUP BY s.id
       ORDER BY s.next_due_date ASC
     `;
@@ -228,81 +226,116 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
 
 ipcMain.handle("subscriptions:update", (event, sub) => {
   return new Promise((resolve, reject) => {
-    const query = `
-      UPDATE subscriptions 
-      SET provider_id = ?, client_id = ?, billing_url = ?, cancellation_url = ?, 
-          amount = ?, frequency = ?, start_date = ?, next_due_date = ?, status = ?, notes = ?
-      WHERE id = ?
-    `;
-    const params = [
-      sub.provider_id || null,
-      sub.client_id || null,
-      sub.billing_url ? sub.billing_url.trim() : null,
-      sub.cancellation_url ? sub.cancellation_url.trim() : null,
-      Number(sub.amount) || 0,
-      sub.frequency || "monthly",
-      sub.start_date || null,
-      sub.next_due_date || null,
-      (sub.status || "active").toLowerCase(),
-      sub.notes ? sub.notes.trim() : "",
-      sub.id,
-    ];
+    const subQuery = `SELECT status FROM subscriptions WHERE id = ?`;
 
-    db.serialize(() => {
-      let failed = false;
+    db.get(subQuery, [sub.id], (error, row) => {
+      if (error) {
+        return reject(error);
+      }
 
-      db.run("BEGIN TRANSACTION", (err) => {
-        if (err) {
-          failed = true;
-          return reject(err);
-        }
-      });
+      // Extract the old status string safely
+      const formerSubStatus = row ? row.status : "";
+      const newStatus = sub.status.toLowerCase();
 
-      // 1. Update main subscription row
-      db.run(query, params, function (err) {
-        if (err && !failed) {
-          failed = true;
-          db.run("ROLLBACK");
-          return reject(err);
-        }
-      });
+      // Determine if status changed
+      const statusChanged =
+        String(formerSubStatus).trim().toUpperCase() !==
+        String(newStatus).trim().toUpperCase();
 
-      // 2. Refresh linked services: delete old ones and insert current selection
-      db.run(
-        "DELETE FROM services WHERE subscription_id = ?",
-        [sub.id],
-        function (err) {
+      // 2. Start serialized execution for the transaction
+      db.serialize(() => {
+        let failed = false;
+
+        db.run("BEGIN TRANSACTION", (err) => {
+          if (err) {
+            failed = true;
+            return reject(err);
+          }
+        });
+
+        // 3. Update main subscription row
+        const updateQuery = `
+          UPDATE subscriptions 
+          SET provider_id = ?, client_id = ?, billing_url = ?, cancellation_url = ?, 
+              amount = ?, frequency = ?, start_date = ?, next_due_date = ?, status = ?, notes = ?
+          WHERE id = ?
+        `;
+        const updateParams = [
+          sub.provider_id || null,
+          sub.client_id || null,
+          sub.billing_url ? sub.billing_url.trim() : null,
+          sub.cancellation_url ? sub.cancellation_url.trim() : null,
+          Number(sub.amount) || 0,
+          sub.frequency || "monthly",
+          sub.start_date || null,
+          sub.next_due_date || null,
+          newStatus,
+          sub.notes ? sub.notes.trim() : "",
+          sub.id,
+        ];
+
+        db.run(updateQuery, updateParams, function (err) {
           if (err && !failed) {
             failed = true;
             db.run("ROLLBACK");
             return reject(err);
           }
-        },
-      );
+        });
 
-      if (Array.isArray(sub.services) && sub.services.length > 0) {
-        const stmt = db.prepare(
-          "INSERT INTO services (id, subscription_id, name) VALUES (?, ?, ?)",
-        );
-        for (const service of sub.services) {
-          stmt.run([uuidv4(), sub.id, String(service).trim()], (err) => {
+        // 4. Insert status change ONLY if it actually changed
+        if (statusChanged) {
+          const insertStatusQuery = `INSERT INTO status_changes (id, subscription_id, former_status, new_status) VALUES (?, ?, ?, ?)`;
+          db.run(
+            insertStatusQuery,
+            [uuidv4(), sub.id, formerSubStatus, newStatus],
+            function (err) {
+              if (err && !failed) {
+                failed = true;
+                db.run("ROLLBACK");
+                return reject(err);
+              }
+            },
+          );
+        }
+
+        // 5. Refresh linked services: delete old ones
+        db.run(
+          "DELETE FROM services WHERE subscription_id = ?",
+          [sub.id],
+          function (err) {
             if (err && !failed) {
               failed = true;
               db.run("ROLLBACK");
               return reject(err);
             }
-          });
-        }
-        stmt.finalize();
-      }
+          },
+        );
 
-      // 3. Commit changes
-      db.run("COMMIT", function (err) {
-        if (err && !failed) {
-          db.run("ROLLBACK");
-          return reject(err);
+        // 6. Insert new services
+        if (Array.isArray(sub.services) && sub.services.length > 0) {
+          const stmt = db.prepare(
+            "INSERT INTO services (id, subscription_id, name) VALUES (?, ?, ?)",
+          );
+          for (const service of sub.services) {
+            stmt.run([uuidv4(), sub.id, String(service).trim()], (err) => {
+              if (err && !failed) {
+                failed = true;
+                db.run("ROLLBACK");
+                return reject(err);
+              }
+            });
+          }
+          stmt.finalize();
         }
-        if (!failed) resolve({ success: true, ...sub });
+
+        // 7. Commit changes
+        db.run("COMMIT", function (err) {
+          if (err && !failed) {
+            db.run("ROLLBACK");
+            return reject(err);
+          }
+          if (!failed) resolve({ success: true, ...sub });
+        });
       });
     });
   });
@@ -327,11 +360,11 @@ ipcMain.handle("utils:openLink", async (event, url) => {
 });
 
 // ----------------------------------------------------
-// IPC: Providers
+// IPC: available_services
 // ----------------------------------------------------
-ipcMain.handle("providers:getAll", (event) => {
+ipcMain.handle("available_services:getAll", (event) => {
   return new Promise((resolve, reject) => {
-    const query = "SELECT * FROM providers";
+    const query = "SELECT * FROM available_services";
     db.all(query, [], function (err, rows) {
       if (err) reject(err);
       else resolve(rows || []);
@@ -339,40 +372,57 @@ ipcMain.handle("providers:getAll", (event) => {
   });
 });
 
-ipcMain.handle("providers:add", (event, { name, url }) => {
-  return new Promise((resolve, reject) => {
-    const uid = uuidv4();
-    const query = "INSERT INTO providers (id, name, url) VALUES ( ?, ?, ?)";
-    const params = [uid, name ? name.trim() : "", url ? url.trim() : ""];
-    db.run(query, params, function (err) {
-      if (err) reject(err);
-      else resolve({ uid, name, url });
+ipcMain.handle(
+  "available_services:add",
+  (event, { service_name, provider_name, amount, frequency, url }) => {
+    return new Promise((resolve, reject) => {
+      const uid = uuidv4();
+      console.log(frequency);
+      const query =
+        "INSERT INTO available_services (id, service_name, provider_name, amount, frequency, url) VALUES ( ?, ?, ?, ?, ?, ?)";
+      const params = [
+        uid,
+        service_name ? service_name.trim() : "",
+        provider_name ? provider_name.trim() : "",
+        amount || 0,
+        frequency in Array.from(("monthly", "anualy", "bi-anualy"))
+          ? frequency.trim()
+          : "anualy",
+        url ? url.trim() : "",
+      ];
+      db.run(query, params, function (err) {
+        if (err) reject(err);
+        else resolve({ success: true });
+      });
     });
-  });
-});
+  },
+);
 
-ipcMain.handle("providers:update", (event, provider) => {
+ipcMain.handle("available_services:update", (event, service) => {
   return new Promise((resolve, reject) => {
     const query = `
-      UPDATE providers 
-      SET name = ?, url = ?
+      UPDATE available_services 
+      SET service_name = ?, provider_name = ?, amount = ?, frequency = ?, url = ?
       WHERE id = ?
     `;
     const params = [
-      provider.name ? provider.name.trim() : "",
-      provider.url ? provider.url.trim() : null,
-      provider.id,
+      service.service_name ? service.service_name.trim() : "",
+      service.provider_name ? service.provider_name.trim() : "",
+      service.amount || 0,
+      service.frequency || "",
+      service.url ? service.url.trim() : null,
+      service.id,
     ];
     db.run(query, params, function (err) {
       if (err) reject(err);
-      else resolve({ ...provider });
+      else resolve({ service });
     });
   });
 });
 
-ipcMain.handle("providers:delete", (event, id) => {
+ipcMain.handle("available_services:delete", (event, id) => {
   return new Promise((resolve, reject) => {
-    db.run("DELETE FROM providers WHERE id = ?", [id], function (err) {
+    db.run("DELETE FROM available_services WHERE id = ?", [id], function (err) {
       if (err) reject(err);
       else resolve({ success: true });
     });
@@ -380,6 +430,20 @@ ipcMain.handle("providers:delete", (event, id) => {
 });
 
 // ----------------------------------------------------
-// IPC: Providers
+// IPC: ststus change
 // ----------------------------------------------------
-ipcMain.handle("statusChanges:getSubscription", (event, { id }) => {});
+ipcMain.handle("statusChanges:getSubscription", (event, id) => {
+  return new Promise((resolve, reject) => {
+    const query = `SELECT * FROM status_changes WHERE subscription_id = ? ORDER BY timestamp ASC`;
+
+    db.all(query, [id], (error, rows) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+});
+
+ipcMain.handle("statusChanges:add", (event, sc) => {}); //manual changes get created in update subscription

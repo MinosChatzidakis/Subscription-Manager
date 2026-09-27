@@ -14,11 +14,16 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("subscriptions:update", data),
   deleteSubscription: (id) => ipcRenderer.invoke("subscriptions:delete", id),
 
-  //*providers
-  getProviders: () => ipcRenderer.invoke("providers:getAll"),
-  createProvider: (data) => ipcRenderer.invoke("providers:add", data),
-  updateProvider: (data) => ipcRenderer.invoke("providers:update", data),
-  deleteProvider: (id) => ipcRenderer.invoke("providers:delete", id),
+  //*available_services
+  getServices: () => ipcRenderer.invoke("available_services:getAll"),
+  createService: (data) => ipcRenderer.invoke("available_services:add", data),
+  updateService: (data) =>
+    ipcRenderer.invoke("available_services:update", data),
+  deleteService: (id) => ipcRenderer.invoke("available_services:delete", id),
+
+  //*status changes
+  getStatusChanges: (id) =>
+    ipcRenderer.invoke("statusChanges:getSubscription", id),
 
   openLink: (url) => ipcRenderer.invoke("utils:openLink", url),
 });
