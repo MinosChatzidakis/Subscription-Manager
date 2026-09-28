@@ -6,3 +6,4 @@ dist-electron/
 *.sqlite3
 .env
 .DS_Store
+TODO

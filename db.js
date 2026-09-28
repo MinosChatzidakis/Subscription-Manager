@@ -34,8 +34,8 @@ db.serialize(() => {
       frequency TEXT NOT NULL,
       start_date TEXT NOT NULL,
       next_due_date TEXT NOT NULL,
-      status TEXT CHECK(status IN ('active', 'canceled', 'renewal coming up)) DEFAULT 'active',
-      payment_status TEXT CHECK (payment_status IN ('pending', 'invoice issued', 'paid')),
+      status TEXT CHECK(status IN ('active', 'canceled', 'renewal coming up')) DEFAULT 'active',
+      payment_status TEXT CHECK (payment_status IN ( NULL, 'pending', 'invoice issued', 'paid')) DEFAULT NULL,
       notes TEXT,
       services_str TEXT
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -52,8 +52,8 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS status_changes (
       id TEXT PRIMARY KEY,
       subscription_id TEXT,
-      former_status TEXT NOT NULL CHECK(former_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
-      new_status TEXT NOT NULL CHECK(new_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
+      former_status TEXT CHECK(former_status IN (NULL, 'active', 'canceled', 'renewal coming up', 'pending', 'invoice issued', 'paid')) DEFAULT 'active',
+      new_status TEXT CHECK(new_status IN (NULL, 'active', 'paused', 'canceled', 'past_due', 'invoice issued', 'invoice paid')) DEFAULT 'active',
       concerns_payment INTEGER NOT NULL DEFAULT 0,
       timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`,
