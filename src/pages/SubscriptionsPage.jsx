@@ -29,20 +29,54 @@ export default function App() {
   const DEFAULT_CLIENT = { name: "", logo_url: "", url: "" };
   const [client, setClient] = useState(DEFAULT_CLIENT);
 
-  const DEFAULT_SUB = {
-    provider_name: "",
-    preset_id: "",
-    client_id: "",
-    services: [],
-    amount: 0,
-    frequency: "monthly",
-    start_date: "",
-    next_due_date: "",
-    billing_url: "",
-    status: "ACTIVE",
-    notes: "",
+  const formatDate = (date) => {
+    const yyyy = date.getFullYear();
+
+    // Months are 0-indexed in JS (January is 0), so we add 1.
+    // padStart(2, '0') ensures months 1-9 become '01'-'09'
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+
+    const dd = String(date.getDate()).padStart(2, "0");
+
+    return `${yyyy}-${mm}-${dd}`;
   };
-  const [subscription, setSubscription] = useState(DEFAULT_SUB);
+
+  const calculateNextDueDate = (startDateStr, frequency) => {
+    if (!startDateStr) return "";
+
+    // Create a date object from the YYYY-MM-DD string
+    const [year, month, day] = startDateStr.split("-").map(Number);
+    // Note: month is 0-indexed in the Date constructor, so subtract 1
+    const nextDate = new Date(year, month - 1, day);
+
+    if (frequency === "anualy") {
+      nextDate.setFullYear(nextDate.getFullYear() + 1);
+    } else if (frequency === "monthly") {
+      nextDate.setMonth(nextDate.getMonth() + 1);
+    } else {
+      nextDate.setFullYear(nextDate.getFullYear() + 2);
+    }
+    return formatDate(nextDate);
+  };
+  const getDefaultSub = () => {
+    const today = formatDate(new Date()); //get a new date every time it is run
+
+    return {
+      provider_name: "",
+      preset_id: "",
+      client_id: "",
+      services: [],
+      amount: 0,
+      frequency: "monthly",
+      start_date: today,
+      next_due_date: calculateNextDueDate(today, "monthly"),
+      billing_url: "",
+      status: "ACTIVE",
+      payment_status: "",
+      notes: "",
+    };
+  };
+  const [subscription, setSubscription] = useState(getDefaultSub());
 
   const [statusChanges, setStatusChanges] = useState([]);
 
@@ -83,14 +117,9 @@ export default function App() {
     "SEO",
   ];
 
-  const AVAILABLE_STATUS = [
-    "ACTIVE",
-    "PAUSED",
-    "CANCELED",
-    "PAST_DUE",
-    "INVOICE_ISSUED",
-    "INVOICE_PAID",
-  ];
+  const AVAILABLE_STATUS = ["ACTIVE", "CANCELED", "RENEWAL COMING UP"];
+
+  const AVAILABLE_PAYMENT_STATUS = ["PENDING", "INVOICE ISSUED", "PAID"];
 
   function handleServiceToggle(service) {
     setSubscription((prev) => {
@@ -139,39 +168,6 @@ export default function App() {
     setIsClientModalOpen(true);
   }
 
-  const formatDate = (date) => {
-    const yyyy = date.getFullYear();
-
-    // Months are 0-indexed in JS (January is 0), so we add 1.
-    // padStart(2, '0') ensures months 1-9 become '01'-'09'
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-
-    const dd = String(date.getDate()).padStart(2, "0");
-
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  // Usage:
-  const today = new Date();
-
-  const calculateNextDueDate = (startDateStr, frequency) => {
-    if (!startDateStr) return "";
-
-    // Create a date object from the YYYY-MM-DD string
-    const [year, month, day] = startDateStr.split("-").map(Number);
-    // Note: month is 0-indexed in the Date constructor, so subtract 1
-    const nextDate = new Date(year, month - 1, day);
-
-    if (frequency === "anualy") {
-      nextDate.setFullYear(nextDate.getFullYear() + 1);
-    } else if (frequency === "monthly") {
-      nextDate.setMonth(nextDate.getMonth() + 1);
-    } else {
-      nextDate.setFullYear(nextDate.getFullYear() + 2);
-    }
-    return formatDate(nextDate);
-  };
-
   async function handleSaveClient(e) {
     e.preventDefault();
     if (editingClientId) {
@@ -217,7 +213,7 @@ export default function App() {
   function openCreateSubModal() {
     setEditingSubId(null);
     setSubscription({
-      ...DEFAULT_SUB,
+      ...getDefaultSub(),
       client_id: selectedClientId !== "all" ? selectedClientId : "", // automatically add the selected client's id
     });
     setIsSubModalOpen(true);
@@ -236,7 +232,8 @@ export default function App() {
       start_date: s.start_date || "",
       next_due_date: s.next_due_date || "",
       billing_url: s.billing_url || "",
-      status: s.status || "ACTIVE",
+      status: s.status?.toUpperCase() || "ACTIVE",
+      payment_status: s.payment_status?.toUpperCase() || "",
       notes: s.notes || "",
     });
     setIsSubModalOpen(true);
@@ -244,7 +241,7 @@ export default function App() {
 
   async function handleSaveSub(e) {
     e.preventDefault();
-    console.log(subscription);
+    console.log(subscription.notes);
     const payload = {
       provider_name: subscription.provider_name || null,
       preset_id: subscription.preset_id || "",
@@ -256,6 +253,7 @@ export default function App() {
       next_due_date: subscription.next_due_date,
       billing_url: subscription.billing_url,
       status: subscription.status || "ACTIVE",
+      payment_status: subscription.payment_status || "",
       notes: subscription.notes || "",
     };
 
@@ -265,7 +263,7 @@ export default function App() {
       await window.api.addSubscription(payload);
     }
 
-    setSubscription(DEFAULT_SUB);
+    setSubscription(getDefaultSub());
     setEditingSubId(null);
     setIsSubModalOpen(false);
     refreshData();
@@ -480,6 +478,7 @@ export default function App() {
                 >
                   NOTES
                 </th>
+                <th>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -552,7 +551,9 @@ export default function App() {
                             handleOpenStatusModal(s.id);
                           }}
                         >
-                          {s.status || "-"}
+                          {(s.payment_status
+                            ? `${s.status} - ${s.payment_status}`
+                            : s.status) || "-"}
                         </td>
                         <td>{s.notes || "-"}</td>
                         <td>
@@ -776,12 +777,17 @@ export default function App() {
           <input
             type="date"
             value={subscription.start_date || ""}
-            onChange={(e) =>
+            onChange={(e) => {
               setSubscription((prev) => ({
                 ...prev,
                 start_date: e.target.value,
-              }))
-            }
+                next_due_date: calculateNextDueDate(
+                  //automatically fill next due date
+                  e.target.value,
+                  subscription.frequency,
+                ),
+              }));
+            }}
             className="form-input"
           />
 
@@ -803,17 +809,39 @@ export default function App() {
           <label className="form-label">Status</label>
           <select
             value={subscription.status || ""}
-            onChange={
-              (e) =>
-                setSubscription((prev) => ({
-                  ...prev,
-                  status: e.target.value,
-                }))
-              //!log status change
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                status: e.target.value,
+              }))
             }
             className="form-input"
           >
             {AVAILABLE_STATUS.map((status) => {
+              return (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              );
+            })}
+          </select>
+
+          {/* Status */}
+          <label className="form-label">Payment Status</label>
+          <select
+            value={subscription.payment_status}
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                payment_status: e.target.value,
+              }))
+            }
+            className="form-input"
+          >
+            <option key={"default"} value={""}>
+              - (Leave blank if this is a new subscription)
+            </option>
+            {AVAILABLE_PAYMENT_STATUS.map((status) => {
               return (
                 <option key={status} value={status}>
                   {status}

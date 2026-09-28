@@ -156,7 +156,7 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
 
     const query = `
       INSERT INTO subscriptions 
-      (id, provider_name, preset_id, client_id, billing_url, amount, frequency, start_date, next_due_date, status, notes, services_str)
+      (id, provider_name, preset_id, client_id, billing_url, amount, frequency, start_date, next_due_date, status, payment_status, notes, services_str)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
@@ -171,6 +171,7 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
       sub.start_date || "",
       sub.next_due_date || null,
       (sub.status || "active").toLowerCase(),
+      (sub.payment_status || "").toLowerCase(),
       sub.notes || "",
       servicesStr || "",
     ];
@@ -193,7 +194,7 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
       servicesStr = servicesArray.join(", "); //disassemble the services array
     }
 
-    const subQuery = `SELECT status FROM subscriptions WHERE id = ?`;
+    const subQuery = `SELECT status, payment_status FROM subscriptions WHERE id = ?`;
 
     db.get(subQuery, [sub.id], (error, row) => {
       if (error) {
@@ -202,12 +203,18 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
 
       // Extract the old status string safely
       const formerSubStatus = row ? row.status : "";
-      const newStatus = sub.status.toLowerCase();
+      const newStatus = sub.status?.toLowerCase();
 
       // Determine if status changed
       const statusChanged =
-        String(formerSubStatus).trim().toUpperCase() !==
-        String(newStatus).trim().toUpperCase();
+        String(formerSubStatus).trim()?.toUpperCase() !==
+        String(newStatus).trim()?.toUpperCase();
+
+      const formerPaymentStatus = row ? row.payment_status : "";
+      const newPaymentStatus = sub.payment_status?.toLowerCase() || "";
+      const paymentStatusChanged =
+        String(formerPaymentStatus).trim()?.toUpperCase() !==
+        String(newPaymentStatus).trim()?.toUpperCase();
 
       // 2. Start serialized execution for the transaction
       db.serialize(() => {
@@ -237,7 +244,7 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
           sub.start_date || null,
           sub.next_due_date || null,
           newStatus,
-
+          newPaymentStatus,
           sub.notes ? sub.notes.trim() : "",
           servicesStr || "",
           sub.id,
@@ -253,10 +260,25 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
 
         // 4. Insert status change ONLY if it actually changed
         if (statusChanged) {
-          const insertStatusQuery = `INSERT INTO status_changes (id, subscription_id, former_status, new_status) VALUES (?, ?, ?, ?)`;
+          const insertStatusQuery = `INSERT INTO status_changes (id, subscription_id, former_status, new_status, concerns_payment) VALUES (?, ?, ?, ?, 0)`;
           db.run(
             insertStatusQuery,
             [uuidv4(), sub.id, formerSubStatus, newStatus],
+            function (err) {
+              if (err && !failed) {
+                failed = true;
+                db.run("ROLLBACK");
+                return reject(err);
+              }
+            },
+          );
+        }
+
+        if (paymentStatusChanged) {
+          const insertStatusQuery = `INSERT INTO status_changes (id, subscription_id, former_status, new_status, concerns_payment) VALUES (?, ?, ?, ?, 1)`;
+          db.run(
+            insertStatusQuery,
+            [uuidv4(), sub.id, formerPaymentStatus, newPaymentStatus],
             function (err) {
               if (err && !failed) {
                 failed = true;
