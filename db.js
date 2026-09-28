@@ -26,15 +26,16 @@ db.serialize(() => {
     `
     CREATE TABLE IF NOT EXISTS subscriptions (
       id TEXT PRIMARY KEY,
-      provider_id TEXT,
+      provider_name TEXT,
+      preset_id TEXT,
       client_id TEXT,
       billing_url TEXT,
-      cancellation_url TEXT,
       amount REAL NOT NULL,
       frequency TEXT NOT NULL,
       start_date TEXT NOT NULL,
       next_due_date TEXT NOT NULL,
-      status TEXT CHECK(status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
+      status TEXT CHECK(status IN ('active', 'canceled', 'renewal coming up)) DEFAULT 'active',
+      payment_status TEXT CHECK (payment_status IN ('pending', 'invoice issued', 'paid')),
       notes TEXT,
       services_str TEXT
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -53,6 +54,7 @@ db.serialize(() => {
       subscription_id TEXT,
       former_status TEXT NOT NULL CHECK(former_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
       new_status TEXT NOT NULL CHECK(new_status IN ('active', 'paused', 'canceled', 'past_due', 'invoice_issued', 'invoice_paid')) DEFAULT 'active',
+      concerns_payment INTEGER NOT NULL DEFAULT 0,
       timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`,
     (err) => {
@@ -69,7 +71,7 @@ db.serialize(() => {
       provider_name TEXT,
       amount REAL DEFAULT 0,
       frequency TEXT NOT NULL CHECK (frequency IN ('monthly', 'anualy', 'bi-anualy')),
-      services_str TEXT
+      services_str TEXT,
       url TEXT
   )`,
     (err) => {

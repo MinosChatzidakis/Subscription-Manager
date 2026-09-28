@@ -1,29 +1,29 @@
 import { createContext, useContext, useState, useEffect } from "react";
 
-const ServicesContext = createContext();
+const PresetsContext = createContext();
 
-export const ServicesProvider = ({ children }) => {
-  const [services, setServices] = useState([]);
+export const PresetsProvider = ({ children }) => {
+  const [presets, setPresets] = useState([]);
 
-  const fetchServices = async () => {
+  const fetchPresets = async () => {
     try {
-      const data = await window.api.getServices();
-      setServices(data || []);
+      const data = await window.api.getPresets();
+      setPresets(data || []);
       //! add to context
     } catch (err) {
-      console.error("Failed to load services:", err);
+      console.error("Failed to load presets:", err);
     }
   };
 
   useEffect(() => {
-    fetchServices();
+    fetchPresets();
   }, []);
 
   return (
-    <ServicesContext.Provider value={{ services, setServices, fetchServices }}>
+    <PresetsContext.Provider value={{ presets, setPresets, fetchPresets }}>
       {children}
-    </ServicesContext.Provider>
+    </PresetsContext.Provider>
   );
 };
 
-export const useServices = () => useContext(ServicesContext);
+export const usePresets = () => useContext(PresetsContext);

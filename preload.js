@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld("api", {
   deleteSubscription: (id) => ipcRenderer.invoke("subscriptions:delete", id),
 
   //*presets
-  getServices: () => ipcRenderer.invoke("presets:getAll"),
+  getPresets: () => ipcRenderer.invoke("presets:getAll"),
   createService: (data) => ipcRenderer.invoke("presets:add", data),
   updateService: (data) => ipcRenderer.invoke("presets:update", data),
   deleteService: (id) => ipcRenderer.invoke("presets:delete", id),

@@ -139,7 +139,6 @@ ipcMain.handle("subscriptions:getAll", () => {
         ...row,
         services: row.services_str ? row.services_str.split(", ") : [],
       }));
-
       resolve(formatted); //send back services as an array which is what the frontend expects to operate
     });
   });
@@ -157,18 +156,16 @@ ipcMain.handle("subscriptions:add", (event, sub) => {
 
     const query = `
       INSERT INTO subscriptions 
-      (id, provider_id, client_id, billing_url, cancellation_url, amount, frequency, start_date, next_due_date, status, notes, services_str)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, provider_name, preset_id, client_id, billing_url, amount, frequency, start_date, next_due_date, status, notes, services_str)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
-
-    const providerId = sub.provider_id || sub.provider || null;
 
     const params = [
       subId,
-      providerId ? String(providerId).trim() : null, // Clean provider ID
+      sub.provider_name ? String(sub.provider_name).trim() : null, // Clean provider ID
+      sub.preset_id || "",
       sub.client_id || null,
       sub.billing_url ? sub.billing_url.trim() : null,
-      sub.cancellation_url ? sub.cancellation_url.trim() : null,
       Number(sub.amount) || 0,
       sub.frequency || "monthly",
       sub.start_date || "",
@@ -226,22 +223,23 @@ ipcMain.handle("subscriptions:update", (event, sub) => {
         // 3. Update main subscription row
         const updateQuery = `
           UPDATE subscriptions 
-          SET provider_id = ?, client_id = ?, billing_url = ?, cancellation_url = ?, 
-              amount = ?, frequency = ?, start_date = ?, next_due_date = ?, status = ?, notes = ?, services_str = ?
+          SET provider_name = ?, preset_id = ?, client_id = ?, billing_url = ?,
+              amount = ?, frequency = ?, start_date = ?, next_due_date = ?, status = ?, payment_status = ?, notes = ?, services_str = ?
           WHERE id = ?
         `;
         const updateParams = [
-          sub.provider_id || null,
+          sub.provider_name || null,
           sub.client_id || null,
+          sub.preset_id || "",
           sub.billing_url ? sub.billing_url.trim() : null,
-          sub.cancellation_url ? sub.cancellation_url.trim() : null,
           Number(sub.amount) || 0,
           sub.frequency || "monthly",
           sub.start_date || null,
           sub.next_due_date || null,
           newStatus,
+
           sub.notes ? sub.notes.trim() : "",
-          //!
+          servicesStr || "",
           sub.id,
         ];
 
@@ -307,8 +305,16 @@ ipcMain.handle("presets:getAll", (event) => {
   return new Promise((resolve, reject) => {
     const query = "SELECT * FROM presets";
     db.all(query, [], function (err, rows) {
-      if (err) reject(err);
-      else resolve(rows || []);
+      if (err) {
+        reject(err);
+      } else {
+        const formatted = (rows || []).map((row) => ({
+          //convert to usable array
+          ...row,
+          services: row.services_str ? row.services_str.split(", ") : [],
+        }));
+        resolve(formatted || []);
+      }
     });
   });
 });
@@ -325,7 +331,6 @@ ipcMain.handle(
     }
     return new Promise((resolve, reject) => {
       const uid = uuidv4();
-      console.log(frequency);
       const query =
         "INSERT INTO presets (id, service_name, provider_name, amount, frequency, services_str, url) VALUES ( ?, ?, ?, ?, ?, ?, ?)";
       const params = [
@@ -370,7 +375,7 @@ ipcMain.handle("presets:update", (event, preset) => {
     ];
     db.run(query, params, function (err) {
       if (err) reject(err);
-      else resolve({ service });
+      else resolve({ preset });
     });
   });
 });

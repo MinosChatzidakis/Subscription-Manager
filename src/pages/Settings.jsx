@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Modal from "../Components/Modal";
 import "./SubscriptionsPage.css";
-import { useServices } from "../Context/ServicesContext";
+import { usePresets } from "../Context/ServicesContext";
 import { useNavigate } from "react-router-dom";
 
 const SettingsPage = () => {
@@ -10,10 +10,18 @@ const SettingsPage = () => {
     provider_name: "",
     frequency: "yearly",
     amount: 0,
+    services: [],
     url: "",
   };
+  const AVAILABLE_SERVICES = [
+    "Cookies",
+    "Hosting",
+    "Domain",
+    "Maintenance",
+    "SEO",
+  ];
 
-  const { services, setServices, fetchServices } = useServices();
+  const { presets, setPresets, fetchPresets } = usePresets();
   const navigate = useNavigate();
 
   const [form, setForm] = useState(DEFAULT_SERVICE);
@@ -28,14 +36,15 @@ const SettingsPage = () => {
   };
 
   // 3. Open modal for Edit
-  const handleOpenEditModal = (service) => {
-    setEditingId(service.id);
+  const handleOpenEditModal = (preset) => {
+    setEditingId(preset.id);
     setForm({
-      service_name: service.service_name || "",
-      provider_name: service.provider_name || "",
-      amount: service.amount || 0,
-      frequency: service.frequency || "",
-      url: service.url || "",
+      service_name: preset.service_name || "",
+      provider_name: preset.provider_name || "",
+      amount: preset.amount || 0,
+      frequency: preset.frequency || "",
+      services: preset.services || [],
+      url: preset.url || "",
     });
     setIsModalOpen(true);
   };
@@ -61,6 +70,7 @@ const SettingsPage = () => {
           provider_name: form.provider_name.trim() || "",
           amount: form.amount || 0,
           frequency: form.frequency.trim() || "",
+          services: form.services || [],
           url: form.url.trim() || "",
         });
       } else {
@@ -70,25 +80,42 @@ const SettingsPage = () => {
           provider_name: form.provider_name.trim() || "",
           amount: form.amount || 0,
           frequency: form.frequency.trim() || "",
+          services: form.services || [],
           url: form.url.trim() || "",
         });
       }
 
-      fetchServices(); //refresh
+      fetchPresets(); //refresh
       handleCloseModal();
     } catch (err) {
       console.error("Failed to save service:", err);
       alert("Error saving service. Check logs.");
     }
   };
-
+  function handleServiceToggle(service) {
+    setForm((prev) => {
+      const currentServices = Array.isArray(prev?.services)
+        ? prev.services
+        : [];
+      if (currentServices.includes(service)) {
+        return {
+          ...prev,
+          services: currentServices.filter((s) => s !== service),
+        };
+      }
+      return {
+        ...prev,
+        services: [...currentServices, service],
+      };
+    });
+  }
   // 6. Delete handler
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this service?"))
       return;
     try {
       await window.api.deleteService(id);
-      fetchServices();
+      fetchPresets();
     } catch (err) {
       console.error("Failed to delete service:", err);
     }
@@ -100,12 +127,12 @@ const SettingsPage = () => {
 
       {/* service List */}
       <div style={{ marginBottom: "20px" }}>
-        {services.length === 0 ? (
-          <p>No services configured yet.</p>
+        {presets.length === 0 ? (
+          <p>No presets configured yet.</p>
         ) : (
-          services.map((service) => (
+          presets.map((preset) => (
             <div
-              key={service.id}
+              key={preset.id}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -117,17 +144,17 @@ const SettingsPage = () => {
               }}
             >
               <div>
-                <strong>{`${service.service_name} (${service.provider_name})`}</strong>
+                <strong>{`${preset.service_name} (${preset.provider_name})`}</strong>
                 <div style={{ fontSize: "0.85em", color: "#666" }}>
-                  {service.url}
+                  {preset.url}
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => handleOpenEditModal(service)}>
+                <button onClick={() => handleOpenEditModal(preset)}>
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(service.id)}
+                  onClick={() => handleDelete(preset.id)}
                   style={{ color: "red" }}
                 >
                   Delete
@@ -150,7 +177,7 @@ const SettingsPage = () => {
           message={editingId !== null ? "Edit Service" : "Add Service"}
           saveMessage={editingId !== null ? "Save Changes" : "Create"}
         >
-          <label className="form-label">Service Name</label>
+          <label className="form-label">Preset Name</label>
           <input
             type="text"
             value={form.service_name}
@@ -159,8 +186,38 @@ const SettingsPage = () => {
             className="form-input"
             required
           />
+          {/* Select services */}
+          <label className="form-label">Services</label>
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              flexWrap: "wrap",
+              marginBottom: "12px",
+            }}
+          >
+            {AVAILABLE_SERVICES.map((service) => (
+              <label
+                key={service}
+                style={{
+                  color: "#fff",
+                  fontSize: "0.85rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form?.services?.includes(service)}
+                  onChange={() => handleServiceToggle(service)}
+                />
+                {service}
+              </label>
+            ))}
+          </div>
 
-          <label className="form-label">service Name</label>
+          <label className="form-label">Provider</label>
           <input
             type="text"
             value={form.provider_name}
