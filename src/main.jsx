@@ -2,14 +2,14 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
-import { ProvidersProvider } from "./Context/providersContext";
+import { PresetsProvider } from "./Context/ServicesContext";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <HashRouter>
-      <ProvidersProvider>
+      <PresetsProvider>
         <App />
-      </ProvidersProvider>
+      </PresetsProvider>
     </HashRouter>
   </React.StrictMode>,
 );

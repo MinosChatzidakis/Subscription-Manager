@@ -1,8 +1,12 @@
 
 Todo:
   ☐ Invoices & billing history
-  ☐ status & status history @started(26-09-25 13:55)
+  ☐ automatic status
+  ☐ recurring subscriptions -- handle them
   ☐ notifications & emails
-  ✔ sort by @done(26-09-25 13:53)
+  ☐ convert to a web app
   ☐ export to csv
   ☐ logos
+  ✔ service types with set attributes @done(26-09-28 14:48)
+  ✔ status & status history @started(26-09-25 13:55) @done(26-09-26 18:04) @lasted(1d4h9m51s)
+  ✔ sort by @done(26-09-25 13:53)

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import "./SubscriptionsPage.css";
 import { useNavigate } from "react-router-dom";
-import { useProviders } from "../Context/providersContext";
+import { usePresets } from "../Context/ServicesContext";
 import Modal from "../Components/Modal";
 
 export default function App() {
@@ -10,7 +10,7 @@ export default function App() {
   const [subs, setSubs] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("all");
 
-  const { providers } = useProviders();
+  const { presets } = usePresets();
   const navigate = useNavigate();
 
   // Modal toggles
@@ -30,14 +30,14 @@ export default function App() {
   const [client, setClient] = useState(DEFAULT_CLIENT);
 
   const DEFAULT_SUB = {
-    provider_id: "",
+    provider_name: "",
+    preset_id: "",
     client_id: "",
     services: [],
     amount: 0,
     frequency: "monthly",
     start_date: "",
     next_due_date: "",
-    cancellation_url: "",
     billing_url: "",
     status: "ACTIVE",
     notes: "",
@@ -48,7 +48,6 @@ export default function App() {
 
   const handleOpenStatusModal = async (subId) => {
     setEditingSubId(subId);
-    setIsStatusModalOpen(true);
 
     try {
       const data = await window.api.getStatusChanges(subId);
@@ -58,10 +57,10 @@ export default function App() {
       window.alert("Something went wrong, please try again later");
       setIsStatusModalOpen(false);
     }
+    setIsStatusModalOpen(true);
   };
 
-  //const [providers, setProviders] = useState(AVAILABLE_PROVIDERS); //change this
-  const getProviderById = (id) => providers.find((p) => p.id === id);
+  const getPresetById = (id) => presets.find((p) => p.id === id);
 
   async function refreshData() {
     const [c, s] = await Promise.all([
@@ -82,6 +81,15 @@ export default function App() {
     "Domain",
     "Maintenance",
     "SEO",
+  ];
+
+  const AVAILABLE_STATUS = [
+    "ACTIVE",
+    "PAUSED",
+    "CANCELED",
+    "PAST_DUE",
+    "INVOICE_ISSUED",
+    "INVOICE_PAID",
   ];
 
   function handleServiceToggle(service) {
@@ -130,6 +138,39 @@ export default function App() {
     });
     setIsClientModalOpen(true);
   }
+
+  const formatDate = (date) => {
+    const yyyy = date.getFullYear();
+
+    // Months are 0-indexed in JS (January is 0), so we add 1.
+    // padStart(2, '0') ensures months 1-9 become '01'-'09'
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+
+    const dd = String(date.getDate()).padStart(2, "0");
+
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Usage:
+  const today = new Date();
+
+  const calculateNextDueDate = (startDateStr, frequency) => {
+    if (!startDateStr) return "";
+
+    // Create a date object from the YYYY-MM-DD string
+    const [year, month, day] = startDateStr.split("-").map(Number);
+    // Note: month is 0-indexed in the Date constructor, so subtract 1
+    const nextDate = new Date(year, month - 1, day);
+
+    if (frequency === "anualy") {
+      nextDate.setFullYear(nextDate.getFullYear() + 1);
+    } else if (frequency === "monthly") {
+      nextDate.setMonth(nextDate.getMonth() + 1);
+    } else {
+      nextDate.setFullYear(nextDate.getFullYear() + 2);
+    }
+    return formatDate(nextDate);
+  };
 
   async function handleSaveClient(e) {
     e.preventDefault();
@@ -186,7 +227,8 @@ export default function App() {
     setEditingSubId(s.id);
     setSubscription({
       //create shallow copy
-      provider_id: s.provider || s.provider_id || "",
+      provider_name: s.provider_name || "",
+      preset_id: s.preset_id || "",
       client_id: s.client_id || "",
       services: Array.isArray(s.services) ? s.services : [],
       amount: s.amount || 0,
@@ -194,7 +236,6 @@ export default function App() {
       start_date: s.start_date || "",
       next_due_date: s.next_due_date || "",
       billing_url: s.billing_url || "",
-      cancellation_url: s.cancellation_url || "",
       status: s.status || "ACTIVE",
       notes: s.notes || "",
     });
@@ -203,8 +244,10 @@ export default function App() {
 
   async function handleSaveSub(e) {
     e.preventDefault();
+    console.log(subscription);
     const payload = {
-      provider_id: subscription.provider_id || null,
+      provider_name: subscription.provider_name || null,
+      preset_id: subscription.preset_id || "",
       client_id: subscription.client_id || null,
       services: subscription.services,
       amount: parseFloat(subscription.amount) || 0,
@@ -212,7 +255,6 @@ export default function App() {
       start_date: subscription.start_date,
       next_due_date: subscription.next_due_date,
       billing_url: subscription.billing_url,
-      cancellation_url: subscription.cancellation_url,
       status: subscription.status || "ACTIVE",
       notes: subscription.notes || "",
     };
@@ -393,7 +435,7 @@ export default function App() {
                   onClick={() => handleHeaderClick("services_str")}
                   style={sortBy === "services_str" ? { color: "orange" } : {}}
                 >
-                  SERVICE
+                  PRESET
                 </th>
                 {/* Fixed: Removed stray parenthesis */}
                 <th
@@ -403,8 +445,8 @@ export default function App() {
                   ASSIGNED CLIENT
                 </th>
                 <th
-                  onClick={() => handleHeaderClick("provider_id")}
-                  style={sortBy === "provider_id" ? { color: "orange" } : {}}
+                  onClick={() => handleHeaderClick("provider_name")}
+                  style={sortBy === "provider_name" ? { color: "orange" } : {}}
                 >
                   PROVIDER
                 </th>
@@ -469,14 +511,13 @@ export default function App() {
                     );
                   })
                   .map((s) => {
+                    console.log(s);
                     return (
                       <tr key={s.id}>
                         <td>
                           <strong>
-                            {Array.isArray(s.services) && s.services.length > 0
-                              ? s.services.join(", ")
-                              : getProviderById(s.provider || s.provider_id)
-                                  ?.name || "Subscription"}
+                            {getPresetById(s.preset_id)?.service_name ||
+                              "Custom"}
                           </strong>
                         </td>
                         <td
@@ -488,20 +529,12 @@ export default function App() {
                           {s.client_name || "Unassigned / Personal"}
                         </td>
                         <td
-                          className={
-                            getProviderById(s.provider || s.provider_id)?.url
-                              ? "link-style"
-                              : ""
-                          }
+                          className={s.url ? "link-style" : ""}
                           onClick={() => {
-                            const pUrl = getProviderById(
-                              s.provider || s.provider_id,
-                            )?.url;
-                            if (pUrl) window.api.openLink(pUrl);
+                            if (s.url) window.api.openLink(s.url);
                           }}
                         >
-                          {getProviderById(s.provider || s.provider_id)?.name ||
-                            "-"}
+                          {s.provider_name}
                         </td>
                         <td>
                           ${Number(s.amount).toFixed(2)}{" "}
@@ -617,7 +650,6 @@ export default function App() {
           >
             <option value="">None (Personal / Unassigned)</option>
             {clients.map((c) => {
-              console.log(c);
               return (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -626,21 +658,44 @@ export default function App() {
             })}
           </select>
 
-          <label className="form-label">Select Provider</label>
+          <label className="form-label">Select Preset</label>
           <select
-            value={subscription.provider_id || ""}
-            onChange={(e) =>
+            value={subscription.preset_id || ""}
+            onChange={(e) => {
+              //get the preset required
+              if (e.target.value === "") {
+                setSubscription((prev) => ({
+                  ...prev,
+                  preset_id: "",
+                }));
+                return;
+              }
+
+              const selectedPreset = presets.find((p) => {
+                return p.id === e.target.value;
+              });
+              const todayf = formatDate(new Date());
+              const nextf = calculateNextDueDate(
+                todayf,
+                selectedPreset?.frequency || "anualy",
+              );
               setSubscription((prev) => ({
                 ...prev,
-                provider_id: e.target.value,
-              }))
-            }
+                preset_id: selectedPreset.id,
+                provider_name: selectedPreset.provider_name,
+                services: selectedPreset.services || [],
+                amount: selectedPreset.amount || 0,
+                frequency: selectedPreset.frequency || "anualy",
+                start_date: todayf,
+                next_due_date: nextf,
+              }));
+            }}
             className="form-input"
           >
-            <option value="">None</option>
-            {providers.map((p) => (
+            <option value="">Custom</option>
+            {presets.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name || ""}
+                {`${p.service_name} (${p.provider_name})` || ""}
               </option>
             ))}
           </select>
@@ -701,13 +756,18 @@ export default function App() {
                 onChange={(e) =>
                   setSubscription((prev) => ({
                     ...prev,
-                    frequency: e.target.value,
+                    frequency: e.target.value || "anualy",
+                    next_due_date: calculateNextDueDate(
+                      prev.start_date,
+                      e.target.value || "anualy",
+                    ),
                   }))
                 }
                 className="form-input"
               >
                 <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
+                <option value="anualy">Anualy</option>
+                <option value="bi-anualy">Bi-anualy</option>
               </select>
             </div>
           </div>
@@ -739,6 +799,29 @@ export default function App() {
             className="form-input"
           />
 
+          {/* Status */}
+          <label className="form-label">Status</label>
+          <select
+            value={subscription.status || ""}
+            onChange={
+              (e) =>
+                setSubscription((prev) => ({
+                  ...prev,
+                  status: e.target.value,
+                }))
+              //!log status change
+            }
+            className="form-input"
+          >
+            {AVAILABLE_STATUS.map((status) => {
+              return (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              );
+            })}
+          </select>
+
           <label className="form-label">Notes</label>
           <input
             type="text"
@@ -751,23 +834,10 @@ export default function App() {
             }
             className="form-input"
           />
-
-          <label className="form-label">Billing Portal URL</label>
-          <input
-            type="url"
-            placeholder="https://..."
-            value={subscription.billing_url || ""}
-            onChange={(e) =>
-              setSubscription((prev) => ({
-                ...prev,
-                billing_url: e.target.value,
-              }))
-            }
-            className="form-input"
-          />
         </Modal>
       )}
 
+      {/* ----------------- MODAL: STATUS ----------------- */}
       {isStatusModalOpen && (
         <Modal
           closeModal={() => {
