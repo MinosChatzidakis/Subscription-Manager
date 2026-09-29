@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react";
+"use client";
+import { useState } from "react";
 import Modal from "../Components/Modal";
-import "./SubscriptionsPage.css";
-import { usePresets } from "../Context/ServicesContext";
-import { useNavigate } from "react-router-dom";
+import { usePresets } from "../Context/PresetsContext";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { apiFetch } from "../page";
+import { apiFetch } from "../utils/dateutils";
 
 const SettingsPage = () => {
   const DEFAULT_SERVICE = {
@@ -22,7 +25,7 @@ const SettingsPage = () => {
   ];
 
   const { presets, setPresets, fetchPresets } = usePresets();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const [form, setForm] = useState(DEFAULT_SERVICE);
   const [editingId, setEditingId] = useState(null); // null when creating, number/string when editing
@@ -64,24 +67,30 @@ const SettingsPage = () => {
       if (editingId !== null) {
         // a service has been edited
         // UPDATE in SQLite: send id + payload
-        await window.api.updateService({
-          id: editingId,
-          service_name: form.service_name.trim() || "",
-          provider_name: form.provider_name.trim() || "",
-          amount: form.amount || 0,
-          frequency: form.frequency.trim() || "",
-          services: form.services || [],
-          url: form.url.trim() || "",
+        await apiFetch("/api/presets", {
+          method: "PUT",
+          body: JSON.stringify({
+            id: editingId,
+            service_name: form.service_name.trim() || "",
+            provider_name: form.provider_name.trim() || "",
+            amount: form.amount || 0,
+            frequency: form.frequency.trim() || "",
+            services: form.services || [],
+            url: form.url.trim() || "",
+          }),
         });
       } else {
         // a new service has been added
-        await window.api.createService({
-          service_name: form.service_name.trim() || "",
-          provider_name: form.provider_name.trim() || "",
-          amount: form.amount || 0,
-          frequency: form.frequency.trim() || "",
-          services: form.services || [],
-          url: form.url.trim() || "",
+        await apiFetch("/api/presets", {
+          method: "POST",
+          body: JSON.stringify({
+            service_name: form.service_name.trim() || "",
+            provider_name: form.provider_name.trim() || "",
+            amount: form.amount || 0,
+            frequency: form.frequency.trim() || "",
+            services: form.services || [],
+            url: form.url.trim() || "",
+          }),
         });
       }
 
@@ -109,12 +118,12 @@ const SettingsPage = () => {
       };
     });
   }
-  // 6. Delete handler
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this service?"))
       return;
     try {
-      await window.api.deleteService(id);
+      await apiFetch(`/api/presets?id=${id}`, { method: "DELETE" });
+
       fetchPresets();
     } catch (err) {
       console.error("Failed to delete service:", err);
@@ -167,7 +176,7 @@ const SettingsPage = () => {
 
       {/* Add Button */}
       <button onClick={handleOpenAddModal}>Add Service</button>
-      <button onClick={() => navigate("/")}>Home Screen</button>
+      <Link href="/">Home Screen</Link>
 
       {/* Modal */}
       {isModalOpen && (

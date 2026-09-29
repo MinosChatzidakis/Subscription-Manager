@@ -1,4 +1,4 @@
-import "../pages/SubscriptionsPage.css";
+"use client";
 
 const Modal = ({
   closeModal = () => {},

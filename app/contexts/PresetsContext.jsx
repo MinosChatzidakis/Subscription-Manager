@@ -1,4 +1,6 @@
+"use client";
 import { createContext, useContext, useState, useEffect } from "react";
+import { apiFetch } from "../page";
 
 const PresetsContext = createContext();
 
@@ -7,9 +9,8 @@ export const PresetsProvider = ({ children }) => {
 
   const fetchPresets = async () => {
     try {
-      const data = await window.api.getPresets();
+      const data = await apiFetch("/api/presets");
       setPresets(data || []);
-      //! add to context
     } catch (err) {
       console.error("Failed to load presets:", err);
     }
