@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import pool from "@/app/lib/db";
 import { auth } from "@clerk/nextjs/server";
 import crypto from "crypto";
 
 // GET: Fetch all presets (presets:getAll)
 export async function GET(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const query = "SELECT * FROM presets WHERE user_id = $1";
@@ -27,7 +27,7 @@ export async function GET(request) {
 // POST: Add new preset (presets:add)
 export async function POST(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const preset = await request.json();
@@ -73,7 +73,7 @@ export async function POST(request) {
 // PUT: Update preset (presets:update)
 export async function PUT(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const preset = await request.json();
@@ -119,7 +119,7 @@ export async function PUT(request) {
 // DELETE: Remove preset (presets:delete)
 export async function DELETE(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const { searchParams } = new URL(request.url);

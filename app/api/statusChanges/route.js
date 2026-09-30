@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import pool from "@/app/lib/db";
 import { auth } from "@clerk/nextjs/server";
 
 // GET: Fetch status changes for a sub (statusChanges:getSubscription)
 export async function GET(request) {
   try {
     // 1. Authenticate the user
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     // 2. Extract the subscription_id from the URL

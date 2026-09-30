@@ -1,7 +1,7 @@
 
 Todo:
   ☐ Invoices & billing history
-  ☐ automatic status
+  ☐ automatic status - cron job
   ☐ recurring subscriptions -- handle them
   ☐ notifications & emails
   ☐ convert to a web app

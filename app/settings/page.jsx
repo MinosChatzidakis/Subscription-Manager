@@ -1,11 +1,9 @@
 "use client";
 import { useState } from "react";
 import Modal from "../Components/Modal";
-import { usePresets } from "../Context/PresetsContext";
-import { useRouter } from "next/navigation";
+import { usePresets } from "../contexts/PresetsContext";
 import Link from "next/link";
-import { apiFetch } from "../page";
-import { apiFetch } from "../utils/dateutils";
+import { apiFetch } from "../utils/api";
 
 const SettingsPage = () => {
   const DEFAULT_SERVICE = {
@@ -25,7 +23,6 @@ const SettingsPage = () => {
   ];
 
   const { presets, setPresets, fetchPresets } = usePresets();
-  const router = useRouter();
 
   const [form, setForm] = useState(DEFAULT_SERVICE);
   const [editingId, setEditingId] = useState(null); // null when creating, number/string when editing

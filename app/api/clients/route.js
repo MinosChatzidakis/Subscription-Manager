@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import pool from "@/app/lib/db";
 import { auth } from "@clerk/nextjs/server";
 import crypto from "crypto";
 
 // GET: Fetch all clients
 export async function GET(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     // Added user_id = $1 to ensure users only see their own clients
@@ -24,7 +24,7 @@ export async function GET(request) {
 // POST: Add new client
 export async function POST(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const client = await request.json();
@@ -58,7 +58,7 @@ export async function POST(request) {
 // PUT: Update client
 export async function PUT(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const client = await request.json();
@@ -91,7 +91,7 @@ export async function PUT(request) {
 // DELETE: Remove client
 export async function DELETE(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const { searchParams } = new URL(request.url);

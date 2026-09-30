@@ -1,5 +1,4 @@
 // db.js
-require("dotenv").config(); // MUST be called to load process.env variables
 const { Pool } = require("pg");
 
 // 1. Establish the connection pool

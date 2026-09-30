@@ -3,7 +3,8 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePresets } from "./contexts/PresetsContext";
 import Modal from "@/app/components/Modal";
-import { formatDate, calculateNextDueDate, apiFetch } from "./utils/dateutils";
+import { formatDate, calculateNextDueDate } from "./utils/dateutils";
+import { apiFetch } from "./utils/api";
 
 export default function App() {
   const [clients, setClients] = useState([]);
@@ -617,12 +618,237 @@ export default function App() {
 
       {isSubModalOpen && (
         <Modal
-          closeModal={() => setIsSubModalOpen(false)}
+          closeModal={() => {
+            setIsSubModalOpen(false);
+          }}
           onSave={handleSaveSub}
           message={editingSubId ? "Edit Subscription" : "Add Subscription"}
           saveMessage={editingSubId ? "Save Changes" : "Track Subscription"}
         >
-          {/* Form fields same as original */}
+          <label className="form-label">Assign Client</label>
+          <select
+            value={subscription.client_id || ""}
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                client_id: e.target.value,
+              }))
+            }
+            className="form-input"
+          >
+            <option value="">None (Personal / Unassigned)</option>
+            {clients.map((c) => {
+              return (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              );
+            })}
+          </select>
+
+          <label className="form-label">Select Preset</label>
+          <select
+            value={subscription.preset_id || ""}
+            onChange={(e) => {
+              //get the preset required
+              if (e.target.value === "") {
+                setSubscription((prev) => ({
+                  ...prev,
+                  preset_id: "",
+                }));
+                return;
+              }
+
+              const selectedPreset = presets.find((p) => {
+                return p.id === e.target.value;
+              });
+              const todayf = formatDate(new Date());
+              const nextf = calculateNextDueDate(
+                todayf,
+                selectedPreset?.frequency || "anualy",
+              );
+              setSubscription((prev) => ({
+                ...prev,
+                preset_id: selectedPreset.id,
+                provider_name: selectedPreset.provider_name,
+                services: selectedPreset.services || [],
+                amount: selectedPreset.amount || 0,
+                frequency: selectedPreset.frequency || "anualy",
+                start_date: todayf,
+                next_due_date: nextf,
+              }));
+            }}
+            className="form-input"
+          >
+            <option value="">Custom</option>
+            {presets.map((p) => (
+              <option key={p.id} value={p.id}>
+                {`${p.service_name} (${p.provider_name})` || ""}
+              </option>
+            ))}
+          </select>
+
+          <label className="form-label">Services *</label>
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              flexWrap: "wrap",
+              marginBottom: "12px",
+            }}
+          >
+            {AVAILABLE_SERVICES.map((service) => (
+              <label
+                key={service}
+                style={{
+                  color: "#fff",
+                  fontSize: "0.85rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={subscription?.services?.includes(service)}
+                  onChange={() => handleServiceToggle(service)}
+                />
+                {service}
+              </label>
+            ))}
+          </div>
+
+          <div className="form-row">
+            <div>
+              <label className="form-label">Amount (€) *</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="15.00"
+                value={subscription.amount}
+                onChange={(e) =>
+                  setSubscription((prev) => ({
+                    ...prev,
+                    amount: e.target.value,
+                  }))
+                }
+                required
+                className="form-input"
+              />
+            </div>
+
+            <div>
+              <label className="form-label">Frequency</label>
+              <select
+                value={subscription.frequency}
+                onChange={(e) =>
+                  setSubscription((prev) => ({
+                    ...prev,
+                    frequency: e.target.value || "anualy",
+                    next_due_date: calculateNextDueDate(
+                      prev.start_date,
+                      e.target.value || "anualy",
+                    ),
+                  }))
+                }
+                className="form-input"
+              >
+                <option value="monthly">Monthly</option>
+                <option value="anualy">Anualy</option>
+                <option value="bi-anualy">Bi-anualy</option>
+              </select>
+            </div>
+          </div>
+
+          <label className="form-label">Start Date</label>
+          <input
+            type="date"
+            value={subscription.start_date || ""}
+            onChange={(e) => {
+              setSubscription((prev) => ({
+                ...prev,
+                start_date: e.target.value,
+                next_due_date: calculateNextDueDate(
+                  //automatically fill next due date
+                  e.target.value,
+                  subscription.frequency,
+                ),
+              }));
+            }}
+            className="form-input"
+          />
+
+          <label className="form-label">Next Renewal Date *</label>
+          <input
+            type="date"
+            value={subscription.next_due_date || ""}
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                next_due_date: e.target.value,
+              }))
+            }
+            required
+            className="form-input"
+          />
+
+          {/* Status */}
+          <label className="form-label">Status</label>
+          <select
+            value={subscription.status || ""}
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                status: e.target.value,
+              }))
+            }
+            className="form-input"
+          >
+            {AVAILABLE_STATUS.map((status) => {
+              return (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              );
+            })}
+          </select>
+
+          {/* payment status */}
+          <label className="form-label">Payment Status</label>
+          <select
+            value={subscription.payment_status}
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                payment_status: e.target.value,
+              }))
+            }
+            className="form-input"
+          >
+            <option key={"default"} value={""}>
+              - (Leave blank if this is a new subscription)
+            </option>
+            {AVAILABLE_PAYMENT_STATUS.map((status) => {
+              return (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              );
+            })}
+          </select>
+
+          <label className="form-label">Notes</label>
+          <input
+            type="text"
+            value={subscription.notes || ""}
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                notes: e.target.value,
+              }))
+            }
+            className="form-input"
+          />
         </Modal>
       )}
 

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
-//import { auth } from "@clerk/nextjs/server"; // Ensures only logged-in users can access this
+import pool from "@/app/lib/db";
+import { auth } from "@clerk/nextjs/server"; // Ensures only logged-in users can access this
 import crypto from "crypto"; // Built-in Node tool, replaces uuidv4()
 
 // GET: Fetch all subscriptions
 export async function GET(request) {
   try {
-    /* const { userId } = auth();
-    if (!userId) return new NextResponse("Unauthorized", { status: 401 }); */
+    const { userId } = await auth();
+    if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     const query = `
       SELECT 
@@ -39,9 +39,9 @@ export async function GET(request) {
 // POST: Add new subscription
 export async function POST(request) {
   try {
-    /* const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
- */
+
     const sub = await request.json();
     const servicesStr = Array.isArray(sub.services)
       ? sub.services.join(", ")
@@ -81,7 +81,7 @@ export async function POST(request) {
 
 // PUT: Update subscription (subscriptions:update)
 export async function PUT(request) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
   const sub = await request.json();
@@ -182,7 +182,7 @@ export async function PUT(request) {
 // DELETE: Remove subscription (subscriptions:delete)
 export async function DELETE(request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
     // Read the ID from the URL (e.g., /api/subscriptions?id=123)
