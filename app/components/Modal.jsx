@@ -6,6 +6,7 @@ const Modal = ({
   children,
   message = "", //editing or creating
   saveMessage = "",
+  disableSubmit = false,
 }) => {
   return (
     <div className="modal-backdrop">
@@ -22,7 +23,11 @@ const Modal = ({
             <button type="button" onClick={closeModal} className="cancel-btn">
               Cancel
             </button>
-            <button type="submit" className="submit-btn">
+            <button
+              type="submit"
+              className={disableSubmit ? "disabled-btn" : "submit-btn"}
+              disabled={disableSubmit}
+            >
               {saveMessage}
             </button>
           </div>

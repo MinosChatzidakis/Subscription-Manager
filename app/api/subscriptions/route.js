@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/lib/db";
 import { auth } from "@clerk/nextjs/server"; // Ensures only logged-in users can access this
 import crypto from "crypto"; // Built-in Node tool, replaces uuidv4()
+import { checkStatusChange } from "@/app/lib/statusUtils";
 
 // GET: Fetch all subscriptions
 export async function GET(request) {
@@ -84,10 +85,12 @@ export async function PUT(request) {
   const { userId } = await auth();
   if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
-  const sub = await request.json();
-  const servicesStr = Array.isArray(sub.services)
-    ? sub.services.join(", ")
+  const rawSub = await request.json();
+  const servicesStr = Array.isArray(rawSub.services)
+    ? rawSub.services.join(", ")
     : "";
+
+  const { subscription: sub } = checkStatusChange(rawSub);
 
   const newStatus = sub.status?.toLowerCase();
   const newPaymentStatus = sub.payment_status?.toLowerCase() || "";
@@ -117,6 +120,8 @@ export async function PUT(request) {
     const paymentStatusChanged =
       formerPaymentStatus.trim().toUpperCase() !==
       newPaymentStatus.trim().toUpperCase();
+
+    console.log(statusChanged);
 
     // 3. Update main subscription row
     const updateQuery = `

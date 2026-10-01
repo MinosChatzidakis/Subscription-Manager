@@ -1,4 +1,3 @@
-/* src/App.css */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -294,6 +293,17 @@ button {
   transition: background 0.2s ease;
 }
 
+.disabled-btn {
+  flex: 1;
+  padding: 10px;
+  background: #686a6d;
+  border: none;
+  border-radius: 6px;
+  color: "grey";
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
 .submit-btn:hover {
   background: #1d4ed8;
 }
@@ -321,4 +331,173 @@ button {
 
 .link-style:hover {
   text-decoration: underline;
+}
+
+/* ----------------- SETTINGS PAGE ----------------- */
+.settings-container {
+  max-width: 800px;
+  margin: 0 auto;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.settings-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #94a3b8;
+  background: #020617;
+  border-radius: 8px;
+  border: 1px dashed #334155;
+}
+
+/* ----------------- PRESET CARDS ----------------- */
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preset-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 16px 20px;
+  transition: all 0.2s ease;
+}
+
+.preset-card:hover {
+  border-color: #3b82f6;
+  background: #0b0f19;
+}
+
+.preset-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.preset-provider {
+  color: #94a3b8;
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+.preset-url {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.preset-tags {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tag {
+  background: #1e293b;
+  color: #38bdf8;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.preset-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* ----------------- EXTRA BUTTONS & INPUTS ----------------- */
+.secondary-btn {
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid #334155;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondary-btn:hover {
+  background: #334155;
+  border-color: #475569;
+}
+
+.delete-btn-text {
+  background: transparent;
+  color: #ef4444;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px;
+  transition: color 0.2s ease;
+}
+
+.delete-btn-text:hover {
+  color: #dc2626;
+  text-decoration: underline;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  background: #020617;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #1e293b;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: #2563eb;
+  cursor: pointer;
 }

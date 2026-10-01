@@ -29,6 +29,7 @@ export default function App() {
 
   const DEFAULT_CLIENT = { name: "", logo_url: "", url: "" };
   const [client, setClient] = useState(DEFAULT_CLIENT);
+  const [initialClient, setInitialClient] = useState(null);
 
   const getDefaultSub = () => {
     const today = formatDate(new Date());
@@ -49,6 +50,62 @@ export default function App() {
     };
   };
   const [subscription, setSubscription] = useState(getDefaultSub());
+  const [initialSubscription, setInitialSubscription] = useState(null);
+
+  const hasSubscriptionChanged = () => {
+    if (!subscription || !initialSubscription) return false;
+
+    // Check all standard text/date fields
+    const standardFields = [
+      "provider_name",
+      "preset_id",
+      "client_id",
+      "frequency",
+      "start_date",
+      "next_due_date",
+      "billing_url",
+      "status",
+      "payment_status",
+      "notes",
+    ];
+
+    for (const key of standardFields) {
+      if (subscription[key] !== initialSubscription[key]) return true;
+    }
+
+    // 2. Check amount (safely handles string vs number)
+    if (Number(subscription.amount) !== Number(initialSubscription.amount)) {
+      return true;
+    }
+
+    // 3. Check services array (order-independent)
+    const currentServices = subscription.services || [];
+    const initServices = initialSubscription.services || [];
+
+    if (currentServices.length !== initServices.length) return true;
+
+    // Since lengths are identical, if any current service is missing from the initial list, it changed.
+    const hasDifferentServices = currentServices.some(
+      (service) => !initServices.includes(service),
+    );
+
+    if (hasDifferentServices) return true;
+
+    return false;
+  };
+
+  const hasClientChanged = () => {
+    if (!client || !initialClient) return false;
+
+    const clientFields = ["name", "logo_url", "url"];
+
+    for (const key of clientFields) {
+      if (client[key] !== initialClient[key]) return true;
+    }
+
+    return false;
+  };
+
   const [statusChanges, setStatusChanges] = useState([]);
 
   const handleOpenStatusModal = async (subId) => {
@@ -124,22 +181,34 @@ export default function App() {
   function openCreateClientModal() {
     setEditingClientId(null);
     setClient(DEFAULT_CLIENT);
+    setInitialClient(DEFAULT_CLIENT); // Capture baseline for creating
     setIsClientModalOpen(true);
   }
 
   function openEditClientModal(c, e) {
     e.stopPropagation();
     setEditingClientId(c.id);
-    setClient({
+
+    // Construct the clean object first
+    const clientData = {
       name: c.name || "",
       logo_url: c.logo_url || "",
       url: c.url || "",
-    });
+    };
+
+    setClient(clientData);
+    setInitialClient(clientData); // Now they match perfectly
     setIsClientModalOpen(true);
   }
 
   async function handleSaveClient(e) {
     e.preventDefault();
+    const hasChanges = hasClientChanged();
+
+    if (!hasChanges) {
+      setIsSubModalOpen(false); // Close without saving
+      return;
+    }
     try {
       const payload = {
         name: client.name,
@@ -190,16 +259,23 @@ export default function App() {
   // --- SUBSCRIPTION ACTIONS ---
   function openCreateSubModal() {
     setEditingSubId(null);
-    setSubscription({
+
+    // Construct the clean object first
+    const newSubData = {
       ...getDefaultSub(),
       client_id: selectedClientId !== "all" ? selectedClientId : "",
-    });
+    };
+
+    setSubscription(newSubData);
+    setInitialSubscription(newSubData); // Capture baseline for creating
     setIsSubModalOpen(true);
   }
 
   function openEditSubModal(s) {
     setEditingSubId(s.id);
-    setSubscription({
+
+    // Construct the clean object first
+    const subData = {
       provider_name: s.provider_name || "",
       preset_id: s.preset_id || "",
       client_id: s.client_id || "",
@@ -212,12 +288,23 @@ export default function App() {
       status: s.status?.toUpperCase() || "ACTIVE",
       payment_status: s.payment_status?.toUpperCase() || "",
       notes: s.notes || "",
-    });
+    };
+
+    setSubscription(subData);
+    setInitialSubscription(subData); // Now they match perfectly
     setIsSubModalOpen(true);
   }
 
   async function handleSaveSub(e) {
     e.preventDefault();
+
+    const hasChanges = hasSubscriptionChanged();
+
+    if (!hasChanges) {
+      setIsSubModalOpen(false); // Close without saving
+      return;
+    }
+
     const payload = {
       provider_name: subscription.provider_name || null,
       preset_id: subscription.preset_id || "",
@@ -523,7 +610,7 @@ export default function App() {
                               );
                           }}
                         >
-                          {s.provider_name}
+                          {s.provider_name || "-"}
                         </td>
                         <td>
                           ${Number(s.amount).toFixed(2)}{" "}
@@ -571,15 +658,14 @@ export default function App() {
         </div>
       </main>
 
-      {/* ----------------- MODALS CONTINUED ----------------- */}
-      {/* ... [Modals remain identical, I have omitted the JSX inside them to keep it clean as no fetch calls occur directly in the JSX] ... */}
-
+      {/* ----------------- CLIENT MODAL ----------------- */}
       {isClientModalOpen && (
         <Modal
           closeModal={() => setIsClientModalOpen(false)}
           onSave={handleSaveClient}
           message={editingClientId ? "Edit Client" : "Add Client"}
           saveMessage={editingClientId ? "Save Changes" : "Create Client"}
+          disableSubmit={!hasClientChanged()}
         >
           <label className="form-label">Client Name *</label>
           <input
@@ -616,6 +702,7 @@ export default function App() {
         </Modal>
       )}
 
+      {/* ----------------- SUBSCRIPTION MODAL ----------------- */}
       {isSubModalOpen && (
         <Modal
           closeModal={() => {
@@ -624,6 +711,7 @@ export default function App() {
           onSave={handleSaveSub}
           message={editingSubId ? "Edit Subscription" : "Add Subscription"}
           saveMessage={editingSubId ? "Save Changes" : "Track Subscription"}
+          disableSubmit={!hasSubscriptionChanged()}
         >
           <label className="form-label">Assign Client</label>
           <select
@@ -652,10 +740,6 @@ export default function App() {
             onChange={(e) => {
               //get the preset required
               if (e.target.value === "") {
-                setSubscription((prev) => ({
-                  ...prev,
-                  preset_id: "",
-                }));
                 return;
               }
 
@@ -688,6 +772,20 @@ export default function App() {
             ))}
           </select>
 
+          <label className="form-label">Provider</label>
+          <input
+            type="text"
+            className="form-input"
+            value={subscription.provider_name || ""}
+            onChange={(e) =>
+              setSubscription((prev) => ({
+                ...prev,
+                provider_name: e.target.value,
+              }))
+            }
+            //no reason for a placeholder since preset selection populates this field. If it is empty it means a preset has not been selected
+          />
+
           <label className="form-label">Services *</label>
           <div
             style={{
@@ -719,6 +817,7 @@ export default function App() {
           </div>
 
           <div className="form-row">
+            {/* amount */}
             <div>
               <label className="form-label">Amount (€) *</label>
               <input
@@ -737,6 +836,7 @@ export default function App() {
               />
             </div>
 
+            {/* frequency */}
             <div>
               <label className="form-label">Frequency</label>
               <select
@@ -852,6 +952,7 @@ export default function App() {
         </Modal>
       )}
 
+      {/* ----------------- STATUS MODAL ----------------- */}
       {isStatusModalOpen && (
         <Modal
           closeModal={() => {
